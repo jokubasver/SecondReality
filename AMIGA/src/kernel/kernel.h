@@ -64,6 +64,14 @@ void k_wait_blitter(void);
 /* A copper list that shows nothing (colour 0 black). */
 extern u32 k_empty_copper[];
 
+/* ---- graphics helpers (gfx.c) ----------------------------------------- */
+void k_blit_copy(const void *src, int smod, void *dst, int dmod, int w, int h, int shift);
+void k_blit_or(const void *src, int smod, void *dst, int dmod, int w, int h, int shift);
+void k_blit_clear(void *dst, int dmod, int w, int h);
+u16 k_rgb(const u8 *c);                  /* 6 bit RGB triplet -> 0x0RGB */
+void k_fade_pal(const u8 *a, const u8 *b, u16 *out, int n, int level); /* 0..64 */
+int k_mus_sync(void);                    /* dis_sync() */
+
 /* ---- misc -------------------------------------------------------------- */
 void *memcpy(void *d, const void *s, unsigned int n);
 void *memset(void *d, int c, unsigned int n);

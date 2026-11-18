@@ -78,10 +78,10 @@ def build_music():
 
 def build_kernel(defs):
     srcs = [os.path.join(ROOT, 'src/kernel', x) for x in
-            ('start.S', 'kernel.c', 'loader.c', 'music.c', 'lib.c', 'sintab.c', 'demo.c', 'panic.c')]
+            ('start.S', 'kernel.c', 'loader.c', 'music.c', 'lib.c', 'sintab.c', 'demo.c', 'panic.c', 'gfx.c', 'math.S')]
     objs = compile_dir(srcs, os.path.join(B, 'obj/kernel'), defs)
     elf = os.path.join(B, 'kernel.elf')
-    run([LD, '--no-warn-rwx-segments', '-z', 'noexecstack', '-T', os.path.join(ROOT, 'tools/kernel.ld'), '-o', elf] + objs + [LIBGCC])
+    run([LD, '--no-warn-rwx-segments', '-z', 'noexecstack', '-T', os.path.join(ROOT, 'tools/kernel.ld'), '-o', elf] + objs)
     run([OBJCOPY, '-O', 'binary', elf, os.path.join(B, 'kernel.bin')])
     return elf
 
@@ -100,7 +100,7 @@ def build_part(name, defs):
     elf = os.path.join(B, 'parts', name + '.elf')
     os.makedirs(os.path.dirname(elf), exist_ok=True)
     run([LD, '--no-warn-rwx-segments', '-z', 'noexecstack', '-q', '-T', os.path.join(ROOT, 'tools/part.ld'), '-R', os.path.join(B, 'kernel.elf'),
-         '-o', elf] + objs + [LIBGCC])
+         '-o', elf] + objs)
     run([sys.executable, os.path.join(ROOT, 'tools/mkpart.py'), elf,
          os.path.join(B, 'parts', name + '.prt')], stdout=subprocess.DEVNULL)
 
