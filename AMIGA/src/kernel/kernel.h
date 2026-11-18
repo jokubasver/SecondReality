@@ -61,6 +61,9 @@ unsigned int k_unpack(const void *packed, void *dest);
 /* ---- display ----------------------------------------------------------- */
 void k_set_copper(const void *list);     /* takes effect at next VBL */
 void k_blank(void);                      /* black screen, bitplanes off */
+/* keep the previous part's memory (shown picture) until released */
+void k_hold_old(void);
+void k_release_old(void);
 void k_wait_blitter(void);
 /* A copper list that shows nothing (colour 0 black). */
 extern u32 k_empty_copper[];

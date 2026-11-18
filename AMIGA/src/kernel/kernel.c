@@ -126,14 +126,27 @@ u32 k_empty_copper[] = {
     CEND, CEND
 };
 
-static volatile int old_pending;
+static volatile int old_pending, old_hold;
 static const void *cur_copper = k_empty_copper;
+
+/* A part can keep using the previous part's memory (e.g. its picture)
+ * until it calls k_release_old(). */
+void k_hold_old(void) { old_hold = 1; }
+void k_release_old(void)
+{
+    old_hold = 0;
+    if (old_pending) {
+        k_waitvbl();
+        k_mem_free_tag(MEM_OLD);
+        old_pending = 0;
+    }
+}
 
 void k_set_copper(const void *list)
 {
     cur_copper = list;
     COP1LC = (u32)list;
-    if (old_pending) {
+    if (old_pending && !old_hold) {
         /* the previous part's display stays up until now */
         k_waitvbl();
         k_mem_free_tag(MEM_OLD);

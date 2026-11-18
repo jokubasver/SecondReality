@@ -115,3 +115,22 @@ def asm_db(path):
                 continue
             out.append(int(x[:-1], 16) if x.lower().endswith('h') else int(x))
     return out
+
+
+def picture(rows, pal6, out_w, out_h, ncolors, dither=True, crop=None):
+    """Indexed picture with a 6 bit palette -> (index rows, 8 bit palette).
+    Scales with area averaging (e.g. 320x400 -> 320x200)."""
+    h = len(rows)
+    w = len(rows[0])
+    pal8 = [tuple(min(255, v * 255 // 63) for v in c) for c in pal6]
+    pal8 += [(0, 0, 0)] * (256 - len(pal8))
+    im = indexed_to_rgb(w, h, rows, pal8)
+    if crop:
+        im = im.crop(crop)
+    if im.size != (out_w, out_h):
+        im = im.resize((out_w, out_h), Image.BOX)
+    return quantize(im, ncolors, dither=dither)
+
+
+def copper_colors(pal8):
+    return [((c[0] >> 4) << 8) | ((c[1] >> 4) << 4) | (c[2] >> 4) for c in pal8]

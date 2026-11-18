@@ -25,16 +25,26 @@ void demo_main(void)
             k_run_part(TEST_PART);
     }
 #else
+    /* ---- music 0: intro */
     k_music_load_bank(0, F_MUS0_BANK);
     k_music_play(0, F_MUS0_S0);
     k_preload(F_PART_U2A);
     k_run_part(F_PART_ALKU);
     k_preload(F_PART_PAM);
     k_run_part(F_PART_U2A);
+    k_preload(F_PART_BEGLOGO);
     k_run_part(F_PART_PAM);
+    /* music 1 loads in the background while the title is shown */
+    k_preload(F_MUS1_BANK);
+    k_preload(F_MUS1_S0);
+    k_preload(F_PART_GLENZ);
+    k_run_part(F_PART_BEGLOGO);
+    /* ---- music 1 */
     k_music_load_bank(1, F_MUS1_BANK);
     k_music_play(1, F_MUS1_S0);
+    k_music_free_bank(0);
+    k_run_part(F_PART_GLENZ);
     for (;;)
-        k_run_part(F_PART_TEST);
+        k_waitvbl();
 #endif
 }
