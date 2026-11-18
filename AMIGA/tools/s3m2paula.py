@@ -608,7 +608,7 @@ def write_bank(path, bank, table):
     return len(hdr) + len(bank)
 
 
-def render_wav(path, alloc, table, bank, rate=22050, seconds=None):
+def render_wav(path, alloc, table, bank, rate=44100, seconds=None):
     """Debug: render what Paula would play to a stereo WAV."""
     import wave
     smps = {k: np.frombuffer(bytes(bank[t['off']:t['off'] + t['len']]), dtype=np.int8).astype(np.float32)
