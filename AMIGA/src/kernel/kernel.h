@@ -45,6 +45,7 @@ int k_mus_playing(void);
  * tag MEM_PART are released automatically when the part returns. */
 #define MEM_PART 0
 #define MEM_KEEP 1
+#define MEM_OLD 2                        /* previous part, freed when the next part shows */
 void *k_alloc(u32 size);                 /* MEM_PART, 8 byte aligned, cleared */
 void *k_alloc_tag(u32 size, int tag);
 void k_free(void *p);
@@ -71,6 +72,24 @@ void k_blit_clear(void *dst, int dmod, int w, int h);
 u16 k_rgb(const u8 *c);                  /* 6 bit RGB triplet -> 0x0RGB */
 void k_fade_pal(const u8 *a, const u8 *b, u16 *out, int n, int level); /* 0..64 */
 int k_mus_sync(void);                    /* dis_sync() */
+/* 16 bit free running E-clock counter (709379 Hz), for profiling */
+u16 k_eclock(void);
+
+/* ---- fast 16x16->32 multiplies --------------------------------------
+ * (gcc's widening multiply recognition is disabled together with
+ * -fexpensive-optimizations, so plain C would call __mulsi3) */
+static inline s32 muls16(s16 a, s16 b)
+{
+    s32 r = a;
+    __asm__("muls.w %1,%0" : "+d"(r) : "dmi"(b) : "cc");
+    return r;
+}
+static inline u32 mulu16(u16 a, u16 b)
+{
+    u32 r = a;
+    __asm__("mulu.w %1,%0" : "+d"(r) : "dmi"(b) : "cc");
+    return r;
+}
 
 /* ---- misc -------------------------------------------------------------- */
 void *memcpy(void *d, const void *s, unsigned int n);
@@ -80,6 +99,8 @@ int memcmp(const void *a, const void *b, unsigned int n);
 void k_set_ipl(int level);
 u32 k_random(void);
 void k_debug_color(u16 c);
+/* debug builds: draws a 4 digit hex number into a bitplane */
+void k_debug_hex(u8 *plane, int bpr, int xbyte, int y, u16 v);
 
 /* Sine table: 1024 entries per full circle, amplitude 16384. */
 extern const s16 k_sin1024[1024 + 256];

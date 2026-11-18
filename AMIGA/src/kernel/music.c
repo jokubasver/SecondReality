@@ -251,6 +251,21 @@ void k_music_dma(void)
     }
 }
 
+/* Testing aid: runs the stream silently until the given order is reached. */
+void k_music_skip_to(int order)
+{
+    u16 dma = 0;
+    (void)dma;
+    while (playing && k_mus_order < order) {
+        int need = need_chunk;
+        if (need >= 0)
+            k_music_slow();
+        k_music_tick();
+        if (dmaphase) { dmaphase = 0; dmamask = 0; }
+    }
+    silence();
+}
+
 int k_mus_plus(void)
 {
     int row = k_mus_row, d;

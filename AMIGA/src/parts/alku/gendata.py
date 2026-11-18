@@ -8,19 +8,9 @@ from PIL import Image
 out = sys.argv[1]
 H = gfxconv.Header('alku_data.h')
 
-# ---- picture: 640x150, 6 bit palette
-w, h, rows, _ = gfxconv.load_lbm('ALKU/HOI.LBM')
-# the palette the demo really uses is in HOI.IN0 (after a 16 byte header)
-pal = gfxconv.asm_db(os.path.join(gfxconv.ROOT, 'ALKU/HOI.IN0'))[16:16 + 768]
-pal = [tuple(pal[i:i + 3]) for i in range(0, 768, 3)]
-pal8 = [tuple(min(255, v * 255 // 63) for v in c) for c in pal]
-pic = gfxconv.indexed_to_rgb(640, 150, rows[:150], pal8)
-idx, qpal = gfxconv.quantize(pic, 16, dither=True)
-# keep colour 0 black (background)
-order = sorted(range(16), key=lambda i: sum(qpal[i]))
-remap = {o: n for n, o in enumerate(order)}
-qpal = [qpal[o] for o in order]
-idx = [[remap[v] for v in r] for r in idx]
+# ---- picture: 640x150 (shared with U2A)
+import horizon
+idx, qpal, pal = horizon.alku_horizon()
 pl = gfxconv.planes(idx, 4, width=656, xoff=16)
 for i in range(4):
     H.array('pic_plane%d' % i, pl[i])

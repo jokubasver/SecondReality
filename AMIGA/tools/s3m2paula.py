@@ -558,7 +558,7 @@ def encode_stream(alloc, table):
     return out
 
 
-def write_chunked(path, recs, chunk=4096):
+def write_chunked(path, recs, chunk=1024):
     """Container: 'SRST', u16 nchunks, u16 maxchunk, u32 offsets[n+1], packed chunks.
     Every chunk ends with 0x81 (continue in next chunk) except the last (0x80)."""
     import subprocess, tempfile, os

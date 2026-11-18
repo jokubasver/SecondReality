@@ -2,12 +2,13 @@
  * Second Reality Amiga - kernel core: interrupts, memory, files, parts.
  */
 #include "kernel_int.h"
-#include "../common/unlz.h"
+unsigned int unlz_asm(const void *packed, void *dest);
+#define unlz unlz_asm
 
 volatile u32 k_frames;
 volatile u32 k_dbg_phase, k_dbg_val;
 #ifdef DEBUG
-static volatile int dbg_overlay = 1;
+static volatile int dbg_overlay = 0;
 #define PHASE(x) (k_dbg_phase = (x))
 #else
 #define PHASE(x)
@@ -125,9 +126,19 @@ u32 k_empty_copper[] = {
     CEND, CEND
 };
 
+static volatile int old_pending;
+static const void *cur_copper = k_empty_copper;
+
 void k_set_copper(const void *list)
 {
+    cur_copper = list;
     COP1LC = (u32)list;
+    if (old_pending) {
+        /* the previous part's display stays up until now */
+        k_waitvbl();
+        k_mem_free_tag(MEM_OLD);
+        old_pending = 0;
+    }
 }
 
 void k_blank(void)
@@ -261,12 +272,21 @@ int k_preload_done(int id)
 
 static void wait_done(volatile int *done)
 {
+#ifdef DEBUG
+    if (!*done) dbg_overlay = 1;
+#endif
     while (!*done) {
         /* show the disk request colour while waiting for a disk swap */
         if (k_loader_wanted_disk)
             COLOR(0) = (k_frames & 16) ? 0x400 : 0x000;
-
     }
+#ifdef DEBUG
+    if (dbg_overlay) {
+        dbg_overlay = 0;
+        k_waitvbl();
+        COP1LC = (u32)cur_copper;
+    }
+#endif
 }
 
 /* Loads + unpacks file 'id' into memory with 'extra' zeroed bytes after it. */
@@ -351,19 +371,22 @@ void k_run_part(int id)
     k_vbl_hook = NULL;
     k_copper_hook = NULL;
     PHASE(0x50000000 | id);
-#ifdef DEBUG
-    dbg_overlay = 0;
-#endif
     entry();
-#ifdef DEBUG
-    dbg_overlay = 1;
-#endif
     PHASE(0x5f000000 | id);
     k_vbl_hook = NULL;
     k_copper_hook = NULL;
     INTENA = INTF_COPER | INTF_BLIT;
     k_wait_blitter();
-    k_mem_free_tag(MEM_PART);
+    /* keep the part's memory (its last copper list may still be shown)
+     * until the next part sets up its own display */
+    k_mem_free_tag(MEM_OLD);
+    {
+        int i;
+        for (i = 0; i < nblk; i++)
+            if (blk[i].tag == MEM_PART)
+                blk[i].tag = MEM_OLD;
+    }
+    old_pending = 1;
 }
 
 /* ----------------------------------------------------------------- music */
@@ -413,6 +436,10 @@ void kmain(void)
     DMACON = DMAF_SETCLR | DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER;
     k_loader_init();
     k_music_init();
+    {
+        extern void k_eclock_init(void);
+        k_eclock_init();
+    }
     INTENA = INTF_SETCLR | INTF_INTEN | INTF_VERTB | INTF_EXTER;
     k_set_ipl(0);
     demo_main();

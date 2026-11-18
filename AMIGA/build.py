@@ -45,7 +45,7 @@ def compile_dir(srcs, objdir, extra=()):
     objs = []
     for s in srcs:
         o = os.path.join(objdir, os.path.basename(s).rsplit('.', 1)[0] + '.o')
-        deps = [s] + hdrs + glob.glob(os.path.join(os.path.dirname(s), '*.h'))
+        deps = [s] + hdrs + glob.glob(os.path.join(os.path.dirname(s), '*.h')) + glob.glob(os.path.join(ROOT, 'src/common/*'))
         if newer(o, deps):
             if s.endswith('.S'):
                 run([AS, '-m68000', '--register-prefix-optional', '-o', o, s])
@@ -78,7 +78,7 @@ def build_music():
 
 def build_kernel(defs):
     srcs = [os.path.join(ROOT, 'src/kernel', x) for x in
-            ('start.S', 'kernel.c', 'loader.c', 'music.c', 'lib.c', 'sintab.c', 'demo.c', 'panic.c', 'gfx.c', 'math.S')]
+            ('start.S', 'kernel.c', 'loader.c', 'music.c', 'lib.c', 'sintab.c', 'demo.c', 'panic.c', 'gfx.c', 'math.S', 'unlz.S')]
     objs = compile_dir(srcs, os.path.join(B, 'obj/kernel'), defs)
     elf = os.path.join(B, 'kernel.elf')
     run([LD, '--no-warn-rwx-segments', '-z', 'noexecstack', '-T', os.path.join(ROOT, 'tools/kernel.ld'), '-o', elf] + objs)
@@ -96,6 +96,8 @@ def build_part(name, defs):
             run([sys.executable, gen, os.path.join(B, 'gen')], cwd=d)
             open(stamp, 'w').write('ok')
     srcs = sorted(glob.glob(os.path.join(d, '*.c')) + glob.glob(os.path.join(d, '*.S')))
+    if os.path.exists(os.path.join(d, 'common.txt')):
+        srcs += [os.path.join(ROOT, 'src/common', x.strip()) for x in open(os.path.join(d, 'common.txt')) if x.strip()]
     objs = compile_dir(srcs, os.path.join(B, 'obj', name), defs)
     elf = os.path.join(B, 'parts', name + '.elf')
     os.makedirs(os.path.dirname(elf), exist_ok=True)
@@ -173,10 +175,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--test', help='start directly with this part')
     ap.add_argument('--release', action='store_true')
+    ap.add_argument('--music', type=int, default=0, help='test mode: music 0 or 1')
+    ap.add_argument('--order', type=int, default=0, help='test mode: start music at this order')
     a = ap.parse_args()
     defs = [] if a.release else ['-DDEBUG']
     if a.test:
         defs.append('-DTEST_PART=F_PART_%s' % a.test.upper())
+        defs.append('-DTEST_MUSIC=%d' % a.music)
+        defs.append('-DTEST_ORDER=%d' % a.order)
     if newer(os.path.join(ROOT, 'tools/lzpack'), [os.path.join(ROOT, 'tools/lzpack.c'),
                                                    os.path.join(ROOT, 'src/common/unlz.h')]):
         run(['gcc', '-O2', '-o', os.path.join(ROOT, 'tools/lzpack'), os.path.join(ROOT, 'tools/lzpack.c')])

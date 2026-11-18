@@ -33,11 +33,11 @@ static void vbl(void)
     for (i = 0; i < ncolors; i++)
         COLOR(i) = colors[i];
     if (mode == 1) {
-        int sx = vb_sx + 16 + 16;    /* +16 pad, +16 for the hidden fetch word */
-        int pw = (sx >> 4) - 1, d = 16 - (sx & 15);
-        u32 off;
-        if (d == 16) { d = 0; pw++; }
-        off = pw * 2;
+        /* X = first visible pixel in the buffer (16 pixel pad on the left);
+         * the fetch starts one word early (DDFSTRT 0x30) */
+        int X = vb_sx + 16;
+        int pw = ((X + 15) >> 4) - 1, d = 16 * pw + 16 - X;
+        u32 off = pw * 2;
         BPLPT(0) = (u32)pic_plane0 + off;
         BPLPT(1) = (u32)pic_plane1 + off;
         BPLPT(2) = (u32)pic_plane2 + off;
@@ -178,7 +178,7 @@ void part_main(void)
 {
     int a, t, step, f, tptr;
     (void)pictmp;
-    cop = k_alloc(64 * 4);
+    cop = k_alloc(128 * 4);
     textplane = k_alloc(BPR * PIC_H + BPR);
     ncolors = 0;
     mode = 0;
@@ -262,6 +262,35 @@ void part_main(void)
     }
     pic_colors(64, 0);
     k_waitvbl();
-    /* the picture stays up; the next part takes over the display */
-    k_vbl_hook = NULL;
+    /* Leave a self contained copper list showing the final picture: the
+     * next part (U2A) continues on the same horizon. */
+    {
+        u32 *c = cop + 64;
+        int X = vb_sx + 16, pw = ((X + 15) >> 4) - 1, d = 16 * pw + 16 - X, i;
+        const u8 *pl[5];
+        pl[0] = pic_plane0; pl[1] = pic_plane1; pl[2] = pic_plane2; pl[3] = pic_plane3;
+        pl[4] = textplane;
+        *c++ = CMOVE(R_DIWSTRT, 0x2c81);
+        *c++ = CMOVE(R_DIWSTOP, 0x2cc1);
+        *c++ = CMOVE(R_DDFSTRT, 0x0030);
+        *c++ = CMOVE(R_DDFSTOP, 0x00d0);
+        *c++ = CMOVE(R_BPL1MOD, BPR - 42);
+        *c++ = CMOVE(R_BPL2MOD, BPR - 42);
+        *c++ = CMOVE(R_BPLCON1, d | (d << 4));
+        *c++ = CMOVE(R_BPLCON0, 0x0200);
+        for (i = 0; i < 5; i++) {
+            u32 a = (u32)pl[i] + pw * 2;
+            *c++ = CMOVE(R_BPL1PTH + i * 4, a >> 16);
+            *c++ = CMOVE(R_BPL1PTH + i * 4 + 2, a & 0xffff);
+        }
+        for (i = 0; i < 32; i++)
+            *c++ = CMOVE(R_COLOR00 + i * 2, colors[i]);
+        *c++ = CWAIT(PIC_LINE, 0x07);
+        *c++ = CMOVE(R_BPLCON0, 0x5200);
+        *c++ = CWAIT(PIC_LINE + PIC_H, 0x07);
+        *c++ = CMOVE(R_BPLCON0, 0x0200);
+        *c++ = CEND;
+        k_vbl_hook = NULL;
+        k_set_copper(cop + 64);
+    }
 }

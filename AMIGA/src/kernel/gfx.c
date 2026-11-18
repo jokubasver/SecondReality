@@ -81,3 +81,23 @@ int k_mus_sync(void)
             return synctab[i - 1][1];
     return 4;
 }
+
+/* Free running E-clock counter (CIA-A timer B, 709 kHz, counts down). */
+void k_eclock_init(void)
+{
+    CIAA_CRB = 0x00;
+    CIAA_TBLO = 0xff;
+    CIAA_TBHI = 0xff;
+    CIAA_CRB = 0x11;               /* continuous, force load, start */
+}
+
+u16 k_eclock(void)
+{
+    u8 hi, lo, hi2;
+    do {
+        hi = CIAA_TBHI;
+        lo = CIAA_TBLO;
+        hi2 = CIAA_TBHI;
+    } while (hi != hi2);
+    return (u16)~((hi << 8) | lo);     /* counts up */
+}
