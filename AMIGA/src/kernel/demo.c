@@ -29,7 +29,9 @@ void demo_main(void)
     k_music_play(0, F_MUS0_S0);
     k_preload(F_PART_U2A);
     k_run_part(F_PART_ALKU);
+    k_preload(F_PART_PAM);
     k_run_part(F_PART_U2A);
+    k_run_part(F_PART_PAM);
     k_music_load_bank(1, F_MUS1_BANK);
     k_music_play(1, F_MUS1_S0);
     for (;;)

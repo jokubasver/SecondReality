@@ -163,5 +163,7 @@ typedef signed int s32;
 #define CMOVE(r, v) (((u32)(r) << 16) | ((v) & 0xffff))
 #define CWAIT(y, x) (((u32)((y) & 0xff) << 24) | ((u32)(((x) & 0xfe) | 1) << 16) | 0xfffe)
 #define CEND 0xfffffffe
+/* waits for lines >= 256 need CWAIT_PAL first (end of line 255) */
+#define CWAIT_PAL CWAIT(0xff, 0xde)
 
 #endif

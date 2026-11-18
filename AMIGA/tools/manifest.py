@@ -7,7 +7,7 @@ MUSIC = [
 ]
 
 # part directories under src/parts
-PARTS = ['test', 'alku', 'u2a']
+PARTS = ['test', 'alku', 'u2a', 'pam']
 
 # (id, path, packing: lz | delta | store, disk)
 FILES = [
@@ -20,4 +20,5 @@ FILES = [
     ('PART_TEST', 'build/parts/test.prt', 'lz', 1),
     ('PART_ALKU', 'build/parts/alku.prt', 'lz', 1),
     ('PART_U2A', 'build/parts/u2a.prt', 'lz', 1),
+    ('PART_PAM', 'build/parts/pam.prt', 'lz', 1),
 ]

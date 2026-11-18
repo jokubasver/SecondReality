@@ -85,7 +85,8 @@ void k_panic(u32 vec, u32 *regs, u16 *frame)
 #ifdef DEBUG
 /* Debug status line (kernel screens only): 1 plane, 10 rows at 0x7F000.
  * Glyphs are pre-expanded to one byte per row so drawing is cheap. */
-#define DBG ((u8 *)0x7f000)
+static u8 dbgplane[40 * 10] __attribute__((aligned(4)));
+#define DBG dbgplane
 static u32 dbgcop[16];
 static u8 glyph[16][5];
 static int dbg_init;
@@ -128,8 +129,8 @@ void k_debug_status(u32 a, u32 b, u32 c, u32 d)
     *cp++ = CMOVE(R_DDFSTOP, 0x00d0);
     *cp++ = CMOVE(R_BPLCON0, 0x1200);
     *cp++ = CMOVE(R_BPL1MOD, 0);
-    *cp++ = CMOVE(R_BPL1PTH, 0x0007);
-    *cp++ = CMOVE(R_BPL1PTH + 2, 0xf000);
+    *cp++ = CMOVE(R_BPL1PTH, (u32)DBG >> 16);
+    *cp++ = CMOVE(R_BPL1PTH + 2, (u32)DBG & 0xffff);
     *cp++ = CMOVE(R_COLOR00 + 2, 0xfff);
     *cp++ = CWAIT(0x36, 0x07);
     *cp++ = CMOVE(R_BPLCON0, 0x0200);
