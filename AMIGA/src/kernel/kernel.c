@@ -8,7 +8,11 @@ unsigned int unlz_asm(const void *packed, void *dest);
 volatile u32 k_frames;
 volatile u32 k_dbg_phase, k_dbg_val;
 #ifdef DEBUG
+#ifdef DEBUG_OVERLAY
+static volatile int dbg_overlay = 1;
+#else
 static volatile int dbg_overlay = 0;
+#endif
 #define PHASE(x) (k_dbg_phase = (x))
 #else
 #define PHASE(x)
@@ -67,9 +71,26 @@ void k_level3(void)
     }
 }
 
+u32 k_lev6_frame;
+#ifdef DEBUG
+/* watchdog: called from level 6 with the interrupted frame */
+static u32 wd_last_frames, wd_ticks;
+#endif
 void k_level6(void)
 {
     u8 icr = CIAB_ICR;
+#ifdef DEBUG
+    if (k_frames != wd_last_frames) {
+        wd_last_frames = k_frames;
+        wd_ticks = 0;
+    } else if (++wd_ticks > 260) {
+        extern void k_panic(u32 vec, u32 *regs, u16 *frame);
+        static u32 r[16];
+        r[0] = INTENAR; r[1] = INTREQR; r[2] = DMACONR; r[3] = k_dbg_phase;
+        r[4] = slow_busy;
+        k_panic(0xcc, r, (u16 *)k_lev6_frame);
+    }
+#endif
     if (icr & 1)
         k_music_tick();
     if (icr & 2)
@@ -126,6 +147,7 @@ u32 k_empty_copper[] = {
     CEND, CEND
 };
 
+static void preload_kick(void);
 static volatile int old_pending, old_hold;
 static const void *cur_copper = k_empty_copper;
 
@@ -139,6 +161,7 @@ void k_release_old(void)
         k_waitvbl();
         k_mem_free_tag(MEM_OLD);
         old_pending = 0;
+        preload_kick();
     }
 }
 
@@ -151,6 +174,7 @@ void k_set_copper(const void *list)
         k_waitvbl();
         k_mem_free_tag(MEM_OLD);
         old_pending = 0;
+        preload_kick();
     }
 }
 
@@ -198,8 +222,20 @@ void *k_alloc_tag(u32 size, int tag)
     if (size == 0) size = 8;
     p = find_gap(size);
     if (!p || nblk >= MAXBLK) {
-        /* out of memory: flash and hang */
-        for (;;) COLOR(0) = (u16)k_frames & 1 ? 0xf0f : 0x000;
+        /* out of memory: crash screen with size, largest free block,
+         * block count, phase and the block list */
+        extern void k_panic(u32 vec, u32 *regs, u16 *frame);
+        static u32 info[16];
+        static u16 fr[80];
+        int k;
+        info[0] = size;
+        info[1] = k_mem_free_largest();
+        info[2] = nblk;
+        info[3] = k_dbg_phase;
+        for (k = 0; k < 12 && k < nblk; k++)
+            info[4 + k] = (blk[k].start & 0xfffff) | ((u32)blk[k].tag << 24) |
+                          (((blk[k].end - blk[k].start) >> 12) << 20);
+        k_panic(0xee, info, fr);
     }
     for (i = 0; i < nblk && blk[i].start < p; i++)
         ;
@@ -256,19 +292,37 @@ unsigned int k_unpack(const void *packed, void *dest) { return unlz(packed, dest
 
 u32 k_file_size(int id) { return k_dir[id].size; }
 
-#define MAXPRE 4
-static struct { int id; u8 *buf; volatile int done; } pre[MAXPRE];
+#define MAXPRE 6
+/* state: 0 free, 1 pending (no memory yet), 2 loading/loaded */
+static struct { int id; int state; u8 *buf; volatile int done; } pre[MAXPRE];
 
-/* Starts loading a file's packed data in the background. */
+/* Starts pending preloads for which there is memory now (in order). */
+static void preload_kick(void)
+{
+    int i;
+    for (i = 0; i < MAXPRE; i++) {
+        if (pre[i].state == 1) {
+            const struct dir_entry *d = &k_dir[pre[i].id];
+            if (k_mem_free_largest() < d->packed + 64)
+                return;          /* keep the order: wait for more memory */
+            pre[i].buf = k_alloc_tag(d->packed, MEM_KEEP);
+            pre[i].state = 2;
+            k_loader_queue(d->disk, d->offset, d->packed, pre[i].buf, &pre[i].done);
+        }
+    }
+}
+
+/* Starts loading a file's packed data in the background (as soon as
+ * there is memory for it). */
 void k_preload(int id)
 {
     int i;
     for (i = 0; i < MAXPRE; i++) {
-        if (pre[i].buf == NULL) {
-            const struct dir_entry *d = &k_dir[id];
+        if (pre[i].state == 0) {
             pre[i].id = id;
-            pre[i].buf = k_alloc_tag(d->packed, MEM_KEEP);
-            k_loader_queue(d->disk, d->offset, d->packed, pre[i].buf, &pre[i].done);
+            pre[i].state = 1;
+            pre[i].done = 0;
+            preload_kick();
             return;
         }
     }
@@ -278,7 +332,7 @@ int k_preload_done(int id)
 {
     int i;
     for (i = 0; i < MAXPRE; i++)
-        if (pre[i].buf && pre[i].id == id)
+        if (pre[i].state == 2 && pre[i].id == id)
             return pre[i].done;
     return 0;
 }
@@ -291,9 +345,9 @@ static void wait_done(volatile int *done)
     while (!*done) {
         /* show the disk request colour while waiting for a disk swap */
         if (k_loader_wanted_disk)
-            COLOR(0) = (k_frames & 16) ? 0x400 : 0x000;
+            ;
     }
-#ifdef DEBUG
+#if defined(DEBUG) && !defined(DEBUG_OVERLAY)
     if (dbg_overlay) {
         dbg_overlay = 0;
         k_waitvbl();
@@ -312,12 +366,27 @@ void *k_load_ex(int id, u32 extra, int tag)
     if (total < d->packed + 8) total = d->packed + 8;
     if (total < d->size + extra) total = d->size + extra;
     for (i = 0; i < MAXPRE; i++) {
-        if (pre[i].buf && pre[i].id == id) {
+        if (pre[i].state && pre[i].id == id) {
+            if (pre[i].state == 1) {
+                /* not started for lack of memory: load it directly */
+                pre[i].state = 0;
+                break;
+            }
+            PHASE(0x11000000 | id);
             wait_done(&pre[i].done);
+            PHASE(0x12000000 | id);
             dst = k_alloc_tag(d->size + extra + 8, tag);
-            unlz(pre[i].buf, dst);
+            k_dbg_val = (u32)dst;
+            PHASE(0x13000000 | id);
+            if (d->flags & 1)
+                memcpy(dst, pre[i].buf, d->packed);     /* stored */
+            else
+                unlz(pre[i].buf, dst);
+            PHASE(0x14000000 | id);
             k_free(pre[i].buf);
             pre[i].buf = NULL;
+            pre[i].state = 0;
+            preload_kick();
             return dst;
         }
     }
@@ -410,6 +479,7 @@ void *k_music_bank(int slot) { return music_bank[slot]; }
 
 void k_music_load_bank(int slot, int file_id)
 {
+    PHASE(0x70000000 | file_id);
     if (music_bank[slot])
         k_free(music_bank[slot]);
     music_bank[slot] = k_load_ex(file_id, 0, MEM_KEEP);
@@ -417,6 +487,7 @@ void k_music_load_bank(int slot, int file_id)
 
 void k_music_free_bank(int slot)
 {
+    PHASE(0x71000000 | slot);
     if (music_bank[slot])
         k_free(music_bank[slot]);
     music_bank[slot] = NULL;
@@ -458,4 +529,51 @@ void kmain(void)
     demo_main();
     for (;;)
         ;
+}
+
+/* ----------------------------------------------------- disk swapping */
+#include "kmsg.h"
+extern int k_loader_current_disk(void);
+static u32 diskcop[24];
+
+/* Makes sure disk n is in the drive, asking for it if necessary.  Music
+ * keeps playing. */
+void k_need_disk(int n)
+{
+    volatile int done = 0;
+    static u8 tmp[4];
+    const u8 *msg = n == 2 ? kmsg_disk2 : kmsg_disk1;
+    const void *prev = cur_copper;
+    int shown = 0;
+    if (k_loader_current_disk() == n)
+        return;
+    /* reading one byte from disk n makes the loader identify the disk */
+    k_loader_queue(n, 1024 + 512 * 11 - 4, 2, tmp, &done);
+    while (!done) {
+        if (k_loader_wanted_disk && !shown) {
+            u32 *c = diskcop;
+            *c++ = CMOVE(R_DIWSTRT, 0x2c81);
+            *c++ = CMOVE(R_DIWSTOP, 0x2cc1);
+            *c++ = CMOVE(R_DDFSTRT, 0x0038);
+            *c++ = CMOVE(R_DDFSTOP, 0x00d0);
+            *c++ = CMOVE(R_BPL1MOD, 0);
+            *c++ = CMOVE(R_BPLCON1, 0);
+            *c++ = CMOVE(R_BPLCON0, 0x0200);
+            *c++ = CMOVE(R_COLOR00, 0x000);
+            *c++ = CMOVE(R_COLOR00 + 2, 0xccd);
+            *c++ = CMOVE(R_BPL1PTH, (u32)msg >> 16);
+            *c++ = CMOVE(R_BPL1PTH + 2, (u32)msg & 0xffff);
+            *c++ = CWAIT(0x2c + 120, 0x07);
+            *c++ = CMOVE(R_BPLCON0, 0x1200);
+            *c++ = CWAIT(0x2c + 120 + KMSG_H, 0x07);
+            *c++ = CMOVE(R_BPLCON0, 0x0200);
+            *c++ = CEND;
+            COP1LC = (u32)diskcop;
+            shown = 1;
+        }
+    }
+    if (shown) {
+        k_waitvbl();
+        COP1LC = (u32)prev;
+    }
 }

@@ -7,7 +7,7 @@ MUSIC = [
 ]
 
 # part directories under src/parts
-PARTS = ['test', 'alku', 'u2a', 'pam', 'beglogo', 'glenz', 'tunneli', 'techno']
+PARTS = ['test', 'alku', 'u2a', 'pam', 'beglogo', 'glenz', 'tunneli', 'techno', 'panic']
 
 # (id, path, packing: lz | delta | store, disk)
 FILES = [
@@ -15,8 +15,6 @@ FILES = [
     ('MUS0_S0', 'build/music/mus0_0.str', 'store', 1),
     ('MUS1_BANK', 'build/music/mus1.smp', 'delta', 1),
     ('MUS1_S0', 'build/music/mus1_0.str', 'store', 1),
-    ('MUS0_S18', 'build/music/mus0_18.str', 'store', 1),
-    ('MUS0_S25', 'build/music/mus0_25.str', 'store', 1),
     ('PART_TEST', 'build/parts/test.prt', 'lz', 1),
     ('PART_ALKU', 'build/parts/alku.prt', 'lz', 1),
     ('PART_U2A', 'build/parts/u2a.prt', 'lz', 1),
@@ -25,4 +23,9 @@ FILES = [
     ('PART_GLENZ', 'build/parts/glenz.prt', 'lz', 1),
     ('PART_TUNNELI', 'build/parts/tunneli.prt', 'lz', 1),
     ('PART_TECHNO', 'build/parts/techno.prt', 'lz', 1),
+    # ---- disk 2
+    ('PART_PANIC', 'build/parts/panic.prt', 'lz', 2),
+    ('MUS0_BANK2', 'build/music/mus0.smp', 'delta', 2),
+    ('MUS0_S18', 'build/music/mus0_18.str', 'store', 2),
+    ('MUS0_S25', 'build/music/mus0_25.str', 'store', 2),
 ]

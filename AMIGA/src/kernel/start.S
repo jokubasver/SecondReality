@@ -145,6 +145,8 @@ lev5:
 	rte
 lev6:
 	movem.l	d0-d1/a0-a1,-(sp)
+	lea	16(sp),a0
+	move.l	a0,k_lev6_frame
 	jsr	k_level6
 	movem.l	(sp)+,d0-d1/a0-a1
 	rte

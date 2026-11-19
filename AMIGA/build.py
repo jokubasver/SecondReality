@@ -175,10 +175,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--test', help='start directly with this part')
     ap.add_argument('--release', action='store_true')
+    ap.add_argument('--skip-intro', action='store_true')
     ap.add_argument('--music', type=int, default=0, help='test mode: music 0 or 1')
     ap.add_argument('--order', type=int, default=0, help='test mode: start music at this order')
     a = ap.parse_args()
     defs = [] if a.release else ['-DDEBUG']
+    if a.skip_intro:
+        defs.append('-DSKIP_INTRO')
+    if os.environ.get('OVERLAY'):
+        defs.append('-DDEBUG_OVERLAY')
     if a.test:
         defs.append('-DTEST_PART=F_PART_%s' % a.test.upper())
         defs.append('-DTEST_MUSIC=%d' % a.music)
@@ -188,6 +193,7 @@ def main():
         run(['gcc', '-O2', '-o', os.path.join(ROOT, 'tools/lzpack'), os.path.join(ROOT, 'tools/lzpack.c')])
     build_music()
     gen_files_h()
+    run([sys.executable, os.path.join(ROOT, 'tools/kmsg.py'), os.path.join(B, 'gen')])
     # kernel objects depend on defines: force rebuild of demo.o/kernel.o when they change
     stamp = os.path.join(B, 'obj/defs')
     os.makedirs(os.path.dirname(stamp), exist_ok=True)

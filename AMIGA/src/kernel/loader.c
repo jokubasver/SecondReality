@@ -16,6 +16,8 @@ static u8 *const trackbuf = (u8 *)TRACK_BUF;
 
 enum { S_IDLE, S_SPINUP, S_SEEK0, S_STEP, S_SETTLE, S_READ, S_CHECKID, S_DONE_TRACK };
 
+static int drv;                       /* 0 = DF0, 1 = DF1 */
+static int drv_cyl[2] = { -1, -1 };   /* head position per drive */
 static struct {
     int state;
     int cyl;          /* current head position, -1 unknown */
@@ -49,8 +51,19 @@ static void drive_motor(int on)
     CIAB_PRB = v;
     if (on) v &= ~PRB_MTR; else v |= PRB_MTR;
     CIAB_PRB = v;
-    CIAB_PRB = v & ~PRB_SEL0;          /* select DF0, latching motor state */
+    CIAB_PRB = v & ~(PRB_SEL0 << drv); /* select the drive, latching motor state */
     L.motor = on;
+}
+
+/* Switches to the other drive (used while looking for a disk). */
+static void other_drive(void)
+{
+    drive_motor(0);
+    drv_cyl[drv] = L.cyl;
+    drv ^= 1;
+    L.cyl = drv_cyl[drv];
+    L.disk = -1;
+    L.cached_track = -1;
 }
 
 static void drive_side(int head)
@@ -153,6 +166,7 @@ int k_loader_queue(int disk, u32 offset, u32 len, void *dest, volatile int *done
 }
 
 int k_loader_busy(void) { return q_head != q_tail; }
+int k_loader_current_disk(void) { return L.disk; }
 
 /* debug: state in red, cylinder in green (low bits), errors in blue */
 u32 k_loader_debug(void)
@@ -236,10 +250,11 @@ void k_loader_step(void)
             if (--L.wait <= 0) {       /* timeout: no disk / no sync */
                 DSKLEN = 0x4000;
                 k_loader_errors++;
-                L.disk = -1;
                 L.cyl = -1;
-                L.state = S_SPINUP;
-                L.wait = 50;
+                if (r->disk != L.disk)
+                    other_drive();     /* maybe the disk is in the other drive */
+                L.disk = -1;
+                L.state = S_IDLE;
             }
             return;
         }
@@ -267,8 +282,8 @@ void k_loader_step(void)
                 L.disk = -1;
                 L.cached_track = -1;
                 k_loader_wanted_disk = r->disk;
-                L.state = S_SPINUP;
-                L.wait = 25;
+                other_drive();
+                L.state = S_IDLE;
                 return;
             }
         }

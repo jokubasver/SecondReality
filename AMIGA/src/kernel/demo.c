@@ -28,10 +28,19 @@ void demo_main(void)
     /* ---- music 0: intro */
     k_music_load_bank(0, F_MUS0_BANK);
     k_music_play(0, F_MUS0_S0);
+#ifndef SKIP_INTRO
     k_preload(F_PART_U2A);
     k_run_part(F_PART_ALKU);
     k_preload(F_PART_PAM);
     k_run_part(F_PART_U2A);
+#else
+    {
+        void k_music_skip_to(int order);
+        k_set_ipl(6);
+        k_music_skip_to(12);
+        k_set_ipl(0);
+    }
+#endif
     k_preload(F_PART_BEGLOGO);
     k_run_part(F_PART_PAM);
     /* music 1 loads in the background while the title is shown */
@@ -48,6 +57,12 @@ void demo_main(void)
     k_preload(F_PART_TECHNO);
     k_run_part(F_PART_TUNNELI);
     k_run_part(F_PART_TECHNO);
+    /* ---- disk 2 */
+    {
+        void k_need_disk(int n);
+        k_need_disk(2);
+    }
+    k_run_part(F_PART_PANIC);
     for (;;)
         k_waitvbl();
 #endif

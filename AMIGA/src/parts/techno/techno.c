@@ -509,6 +509,17 @@ static void troll_part(void)
         k_waitvbl();
     }
     SHOW(320, cols);
+    /* PANICEND continues on this picture: planes, layout and colours */
+    {
+        u32 *m = (u32 *)k_msg[1];
+        u16 *w = (u16 *)(k_msg[1] + 4);
+        m[0] = (u32)pic + 42;           /* picture starts at byte 42 */
+        w[0] = 84;                      /* bytes per row */
+        for (i = 0; i < 26; i++)        /* 6 bit palette of the first 26 colours */
+            ;
+        memcpy(k_msg[2], troll_pal, 64);
+        memcpy(k_msg[3], troll_pal + 64, 32);
+    }
     count = 420;
     tbase = k_frames;
     while (!k_exit() && count > 0) {

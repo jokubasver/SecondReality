@@ -131,6 +131,7 @@ void k_debug_status(u32 a, u32 b, u32 c, u32 d)
     *cp++ = CMOVE(R_BPL1MOD, 0);
     *cp++ = CMOVE(R_BPL1PTH, (u32)DBG >> 16);
     *cp++ = CMOVE(R_BPL1PTH + 2, (u32)DBG & 0xffff);
+    *cp++ = CMOVE(R_COLOR00, 0x000);
     *cp++ = CMOVE(R_COLOR00 + 2, 0xfff);
     *cp++ = CWAIT(0x36, 0x07);
     *cp++ = CMOVE(R_BPLCON0, 0x0200);
