@@ -62,7 +62,14 @@ void demo_main(void)
         void k_need_disk(int n);
         k_need_disk(2);
     }
+    k_preload(F_PART_MNTSCRL);
     k_run_part(F_PART_PANIC);
+    /* original: wait until musplus goes below zero and back above */
+    while (k_mus_plus() >= 0)
+        k_waitvbl();
+    while (k_mus_plus() <= 0)
+        k_waitvbl();
+    k_run_part(F_PART_MNTSCRL);
     for (;;)
         k_waitvbl();
 #endif
