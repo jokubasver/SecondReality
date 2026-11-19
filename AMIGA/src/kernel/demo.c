@@ -45,7 +45,9 @@ void demo_main(void)
     k_music_free_bank(0);
     k_preload(F_PART_TUNNELI);
     k_run_part(F_PART_GLENZ);
+    k_preload(F_PART_TECHNO);
     k_run_part(F_PART_TUNNELI);
+    k_run_part(F_PART_TECHNO);
     for (;;)
         k_waitvbl();
 #endif
