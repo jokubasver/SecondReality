@@ -204,6 +204,7 @@ void part_main(void)
     for (i = 0; i < 257; i++)
         coltab[i] = 0xfff;
     k_set_copper(cop);
+    { extern volatile u32 k_dbg_phase; k_dbg_phase = 0x5300000f; }
     while (!k_exit() && k_mus_plus() < 0)
         k_waitvbl();
     k_mus_frame = 0;
@@ -218,6 +219,7 @@ void part_main(void)
     for (;;) {
         u32 now;
         if (k_exit()) break;
+        { extern volatile u32 k_dbg_phase; k_dbg_phase = 0x5100000f; }
         if (k_mus_frame > timetable[ttptr]) {
             memset(fade, 0, sizeof(fade));
             fadesrc = plzpal + 768 * curpal++;

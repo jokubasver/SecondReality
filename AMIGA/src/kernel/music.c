@@ -183,7 +183,7 @@ again:
 #ifdef DEBUG_OVERLAY
         {
             extern volatile u32 k_dbg_val;
-            k_dbg_val = ((u32)k_mus_order << 8) | k_mus_row;
+            k_dbg_val = ((u32)k_mus_order << 24) | ((u32)k_mus_row << 16) | ((u32)k_mus_plusflags << 8) | (k_mus_plus() & 0xff);
         }
 #endif
     }

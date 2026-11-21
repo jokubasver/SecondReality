@@ -211,7 +211,7 @@ void cube_main(void)
 {
     u32 *c;
     int i, b = 0, r, j, p;
-    int ob[3][4];                        /* bounding boxes of the last frames */
+    int ob[3][4], lastplus = -32;                        /* bounding boxes of the last frames */
     u32 t0;
     chunky = k_alloc(80 * CROWS);
     p4buf = k_alloc(40 * CROWS);
@@ -272,6 +272,10 @@ void cube_main(void)
         int pos = 4 * 256 + frames * 4;
         a = k_mus_plus();
         if (k_exit() || (a >= -4 && a < 0)) break;
+        /* a slow frame may step over the window: the marker passed */
+        if (lastplus < 0 && lastplus > -32 && a >= 0) break;
+        lastplus = a;
+        { extern volatile u32 k_dbg_phase; k_dbg_phase = 0x5200000f; }
         if ((pos >> 8) + 3 >= RATAN) pos = (RATAN - 4) * 256 + 255;
         getspl(pos);
         rotate();
