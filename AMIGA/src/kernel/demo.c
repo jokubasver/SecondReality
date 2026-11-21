@@ -80,7 +80,9 @@ void demo_main(void)
     k_set_copper(k_empty_copper);   /* frees MNTSCRL before LENS is unpacked */
     k_preload(F_PART_PLZ);
     k_run_part(F_PART_LENS);
+    k_preload(F_PART_DOTS);
     k_run_part(F_PART_PLZ);
+    k_run_part(F_PART_DOTS);
     for (;;)
         k_waitvbl();
 #endif
