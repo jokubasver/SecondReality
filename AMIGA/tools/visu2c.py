@@ -124,6 +124,13 @@ def convert(base, prefix, outdir, ncolors=16, color_base=16, frame_step=4):
     H.raw('};\n')
     inst = [255] + [uniq.index(o) for o in s.objs[1:]]
     H.array('%s_inst' % prefix, inst, 'u8')
+    # instance flags (U2E.C): 1 = '?_' name, always drawn first; 2 = '?s01'
+    # name, drawn last during animation frames 900..1100
+    fl = [0]
+    for o in s.objs[1:]:
+        nm = o.name
+        fl.append((1 if len(nm) > 1 and nm[1] == '_' else 0) | (2 if nm[1:4] == 's01' else 0))
+    H.array('%s_iflags' % prefix, fl, 'u8')
     for i, st in enumerate(s.streams):
         H.array('%s_stream%d' % (prefix, i), st, 'u8')
     H.raw('static const u8 *const %s_streams[] = { %s };\n' % (

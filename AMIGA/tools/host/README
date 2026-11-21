@@ -1,0 +1,5 @@
+Host test harness for the VISU engine port (src/common/visu3d.c):
+the engine is compiled natively with a stub kernel.h, a C copy of the
+v3xform.S transform and a fill hook that writes the polygons to polys.txt.
+
+  gcc -O1 -I tools/host -I src/common -I build/gen tools/host/u2e_main.c tools/host/xform.c -o /tmp/vis

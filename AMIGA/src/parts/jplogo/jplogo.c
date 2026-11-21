@@ -177,4 +177,20 @@ void part_main(void)
         k_waitvbl();
         b ^= 1;
     }
+    /* fade to white (U2E.C does this after the music change) */
+    t0 = k_frames;
+    for (;;) {
+        int f = (k_frames - t0) * 7 / 5, k;
+        if (f > 33 || k_exit()) break;
+        for (l = 0; l < 32; l++)
+            for (k = 0; k < 2; k++) {
+                int c[3], j;
+                for (j = 0; j < 3; j++) {
+                    c[j] = jpal[l * 3 + j] + f * 2;
+                    if (c[j] > 63) c[j] = 63;
+                }
+                cop[k][7 + l] = CMOVE(R_COLOR00 + l * 2, ((c[0] >> 2) << 8) | ((c[1] >> 2) << 4) | (c[2] >> 2));
+            }
+        k_waitvbl();
+    }
 }

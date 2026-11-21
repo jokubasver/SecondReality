@@ -17,7 +17,7 @@ void demo_main(void)
     {
         void k_music_skip_to(int order);
         k_music_load_bank(TEST_MUSIC, TEST_MUSIC ? F_MUS1_BANK : F_MUS0_BANK);
-        k_music_play(TEST_MUSIC, TEST_MUSIC ? F_MUS1_S0 : F_MUS0_S0);
+        k_music_play(TEST_MUSIC, TEST_MUSIC ? F_MUS1_S0 : TEST_ORDER >= 18 ? F_MUS0_S18 : F_MUS0_S0);
         k_set_ipl(6);
         k_music_skip_to(TEST_ORDER);
         k_set_ipl(0);
@@ -87,8 +87,21 @@ void demo_main(void)
     k_preload(F_PART_COMAN);
     k_run_part(F_PART_WATER);
     k_preload(F_PART_JPLOGO);
+    k_preload(F_MUS0_BANK2);
     k_run_part(F_PART_COMAN);
+    k_preload(F_PART_U2E);
     k_run_part(F_PART_JPLOGO);
+    /* ---- music 0 again: JPLOGO ended on white */
+    {
+        static u32 white[4] = { CMOVE(R_BPLCON0, 0x0200), CMOVE(R_COLOR00, 0xfff), CEND, CEND };
+        void k_music_stop(void);
+        k_set_copper(white);
+        k_music_stop();
+        k_music_free_bank(1);
+        k_music_load_bank(0, F_MUS0_BANK2);
+        k_music_play(0, F_MUS0_S18);
+    }
+    k_run_part(F_PART_U2E);
     for (;;)
         k_waitvbl();
 #endif

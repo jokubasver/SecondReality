@@ -52,6 +52,7 @@ static s32 lsget(struct v3scene *s, int f)
 void v3_step(struct v3scene *s)
 {
     int onum = 0;
+    s->frame++;
     for (;;) {
         int a = *s->sp++, b;
         u32 pf;
@@ -120,7 +121,11 @@ static inline s32 sdiv(s32 n, s32 d)
         return n > 0 ? 32767 : -32767;
     {
         s16 q;
+#ifdef __m68k__
         __asm__("divs.w %2,%0" : "=d"(q) : "0"(n), "d"((s16)d) : "cc");
+#else
+        q = n / d;
+#endif
         return q;
     }
 }
@@ -246,9 +251,15 @@ static void fill_cpu(struct v3screen *scr, int n, const s16 *xs, const s16 *ys, 
         }
         {
             s32 qr, num = xb - xa;
+#ifdef __m68k__
             __asm__("divs.w %2,%0" : "=d"(qr) : "0"(num), "d"((s16)dy) : "cc");
             q = (s16)qr;
             r = (s16)(qr >> 16);
+#else
+            q = num / dy;
+            r = num % dy;
+            (void)qr;
+#endif
         }
         if (r < 0) { q--; r += dy; }
         x = xa;
@@ -306,6 +317,9 @@ static void fill_cpu(struct v3screen *scr, int n, const s16 *xs, const s16 *ys, 
 
 void v3_fill(struct v3screen *scr, int n, const s16 *xs, const s16 *ys, int color)
 {
+#ifdef V3_HOOK_FILL
+    V3_HOOK_FILL(n, xs, ys, color);       /* host test harness */
+#endif
     int i, ymin = 32767, ymax = -32768, xmin = 32767, xmax = -32768;
     int y0, y1, wx0, wx1, w, p;
     u8 *sc = scr->scratch;
@@ -349,9 +363,15 @@ void v3_fill(struct v3screen *scr, int n, const s16 *xs, const s16 *ys, int colo
             /* x steps by q + r/dy per row (one divs.w) */
             s32 qr;
             s32 num = xb - xa;
+#ifdef __m68k__
             __asm__("divs.w %2,%0" : "=d"(qr) : "0"(num), "d"((s16)dy) : "cc");
             q = (s16)qr;
             r = (s16)(qr >> 16);
+#else
+            q = num / dy;
+            r = num % dy;
+            (void)qr;
+#endif
         }
         if (r < 0) { q--; r += dy; }
         x = xa;
@@ -492,8 +512,13 @@ static void draw_poly(struct v3scene *s, const struct v3obj *o, const u16 *pd)
                 if (dz < 0) t = -t;
                 x = a->x + (((b->x - a->x) >> 4) * t >> 4);
                 y = a->y + (((b->y - a->y) >> 4) * t >> 4);
-                xs[n] = sdiv(x, ZMIN) + S->addx;   /* x, y already scaled */
-                ys[n] = sdiv(y, ZMIN) + S->addy;
+                /* x, y already scaled; ZMIN is a power of two.  Clamp
+                 * like the projection does: big walls and floors close
+                 * to the camera (U2E's city) would wrap around */
+                x = (x >> (9 - SHIFT)) + S->addx;
+                y = (y >> (9 - SHIFT)) + S->addy;
+                xs[n] = x > 16000 ? 16000 : x < -16000 ? -16000 : x;
+                ys[n] = y > 16000 ? 16000 : y < -16000 ? -16000 : y;
                 n++;
             }
         }
@@ -585,6 +610,10 @@ void v3_draw(struct v3scene *s, struct v3screen *scr)
         dist[a] = single_z(&s->objs[s->inst[a]], s->objs[s->inst[a]].center);
         if (s->kind == 'C' && (a == 2 || a == 7 || a == 13)) dist[a] = 1000000000;
         if (s->kind == 'R' && a == 14) dist[a] = 1000000000;
+        if (s->iflags) {
+            if (s->iflags[a] & 1) dist[a] = 1000000000;
+            if ((s->iflags[a] & 2) && s->frame > 900 && s->frame < 1100) dist[a] = 1;
+        }
         /* insertion sort, far first */
         for (b = n - 1; b >= 0 && dist[a] > dist[order[b]]; b--)
             order[b + 1] = order[b];

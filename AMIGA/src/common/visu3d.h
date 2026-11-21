@@ -24,7 +24,9 @@ struct v3scene {
     int nstreams;
     char kind;
     const u8 *colmap;
+    const u8 *iflags;       /* optional U2E sort flags per instance */
     /* animation state */
+    s32 frame;              /* animation frames done */
     int si;
     const u8 *sp;
     int fov;

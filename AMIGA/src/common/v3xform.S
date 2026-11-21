@@ -9,7 +9,7 @@
 |   out : per vertex: s32 x*mulx, s32 y*muly, s32 z, s16 sx, s16 sy (16 bytes)
 |         sx/sy are only valid when z >= zmin
 |
-| The rows 0/1 products are >>8 after the 16x16 multiplies (instead of >>14),
+| The rows 0/1 (premultiplied by mulx/256) products are >>6 (8 + 6 = 14),
 | so x and y come out already multiplied by the projection factors.
 
 	.text
@@ -61,7 +61,7 @@ v3_xform_idx:
 	move.w	d2,d6
 	muls.w	4(a1),d6
 	add.l	d6,d3
-	asr.l	#8,d3
+	asr.l	#6,d3
 	add.l	20(a1),d3		| + tx * mulx
 	| ---- y * muly
 	move.w	d0,d4
@@ -72,7 +72,7 @@ v3_xform_idx:
 	move.w	d2,d6
 	muls.w	10(a1),d6
 	add.l	d6,d4
-	asr.l	#8,d4
+	asr.l	#6,d4
 	add.l	24(a1),d4		| + ty * muly
 	movem.l	d3-d5,(a2)
 	| ---- projection: sx = x*mulx / z
@@ -89,6 +89,10 @@ v3_xform_idx:
 3:	move.l	d3,d0
 	divs.w	d6,d3
 	bvs.s	5f
+	cmp.w	#16000,d3		| keep room for + addx
+	bgt.s	5f
+	cmp.w	#-16000,d3
+	blt.s	5f
 	add.w	42(a1),d3		| + addx (low word)
 	move.w	d3,12(a2)
 	bra.s	6f
@@ -101,6 +105,10 @@ v3_xform_idx:
 6:	move.l	d4,d0
 	divs.w	d6,d4
 	bvs.s	7f
+	cmp.w	#16000,d4
+	bgt.s	7f
+	cmp.w	#-16000,d4
+	blt.s	7f
 	add.w	46(a1),d4		| + addy
 	move.w	d4,14(a2)
 	bra.s	8f

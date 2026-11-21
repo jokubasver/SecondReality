@@ -2,12 +2,12 @@
 
 # (output name, module, start orders [a-b = stop at b], sample budget bytes)
 MUSIC = [
-    ('mus0', '../MAIN/MUSIC0.S3M', '0,18-28,25', 200000),
+    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000),
     ('mus1', '../MAIN/MUSIC1.S3M', '0', 240000),
 ]
 
 # part directories under src/parts
-PARTS = ['test', 'alku', 'u2a', 'pam', 'beglogo', 'glenz', 'tunneli', 'techno', 'panic', 'mntscrl', 'lens', 'plz', 'dots', 'water', 'coman', 'jplogo']
+PARTS = ['test', 'alku', 'u2a', 'pam', 'beglogo', 'glenz', 'tunneli', 'techno', 'panic', 'mntscrl', 'lens', 'plz', 'dots', 'water', 'coman', 'jplogo', 'u2e']
 
 # (id, path, packing: lz | delta | store, disk)
 FILES = [
@@ -32,7 +32,7 @@ FILES = [
     ('PART_WATER', 'build/parts/water.prt', 'lz', 2),
     ('PART_COMAN', 'build/parts/coman.prt', 'lz', 2),
     ('PART_JPLOGO', 'build/parts/jplogo.prt', 'lz', 2),
+    ('PART_U2E', 'build/parts/u2e.prt', 'lz', 2),
     ('MUS0_BANK2', 'build/music/mus0.smp', 'delta', 2),
     ('MUS0_S18', 'build/music/mus0_18.str', 'store', 2),
-    ('MUS0_S25', 'build/music/mus0_25.str', 'store', 2),
 ]
