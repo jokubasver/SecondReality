@@ -118,9 +118,11 @@ int k_waitvbl(void)
 
 void k_waitline(int y)
 {
+    /* at or past line y (an exact match can be missed every frame when an
+     * interrupt runs over that line) */
     for (;;) {
         u32 v = (*(volatile u32 *)0xdff004) >> 8;
-        if ((int)(v & 0x1ff) == y)
+        if ((int)(v & 0x1ff) >= y)
             return;
     }
 }
