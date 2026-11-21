@@ -174,6 +174,7 @@ void k_set_copper(const void *list)
 {
     cur_copper = list;
     COP1LC = (u32)list;
+    DMACON = DMAF_SETCLR | DMAF_RASTER;    /* k_blank switches it off */
     if (old_pending && !old_hold) {
         /* the previous part's display stays up until now */
         k_waitvbl();
@@ -374,8 +375,9 @@ int k_preload_done(int id)
 
 static void wait_done(volatile int *done)
 {
+    int waited = !*done;
 #ifdef DEBUG
-    if (!*done) dbg_overlay = 1;
+    if (waited) dbg_overlay = 1;
 #endif
     while (!*done) {
         /* show the disk request colour while waiting for a disk swap */
@@ -383,8 +385,11 @@ static void wait_done(volatile int *done)
             ;
     }
 #if defined(DEBUG) && !defined(DEBUG_OVERLAY)
-    if (dbg_overlay) {
+    if (dbg_overlay)
         dbg_overlay = 0;
+#endif
+#ifndef DEBUG_OVERLAY
+    if (waited) {
         k_waitvbl();
         COP1LC = (u32)cur_copper;
     }
@@ -554,7 +559,7 @@ void kmain(void)
     k_mem_init();
     k_set_copper(k_empty_copper);
     COPJMP1 = 0;
-    DMACON = DMAF_SETCLR | DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER;
+    DMACON = DMAF_SETCLR | DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | DMAF_RASTER;
     k_loader_init();
     k_music_init();
     {

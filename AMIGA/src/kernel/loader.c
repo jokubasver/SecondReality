@@ -161,6 +161,8 @@ int k_loader_queue(int disk, u32 offset, u32 len, void *dest, volatile int *done
     r->dest = (u8 *)dest;
     r->done = done;
     if (done) *done = 0;
+    /* the request must be complete before the interrupt sees it */
+    __asm__ volatile("" ::: "memory");
     q_tail = next;
     return 0;
 }
