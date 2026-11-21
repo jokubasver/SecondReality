@@ -41,9 +41,9 @@ void demo_main(void)
     k_music_load_bank(0, F_MUS0_BANK);
     k_music_play(0, F_MUS0_S0);
 #ifndef SKIP_INTRO
-    k_preload(F_PART_U2A);
+    k_preload_after(F_PART_U2A);
     k_run_part(F_PART_ALKU);
-    k_preload(F_PART_PAM);
+    k_preload_after(F_PART_PAM);
     k_run_part(F_PART_U2A);
 #else
     {
@@ -53,7 +53,7 @@ void demo_main(void)
         k_set_ipl(0);
     }
 #endif
-    k_preload(F_PART_BEGLOGO);
+    k_preload_after(F_PART_BEGLOGO);
     k_run_part(F_PART_PAM);
     {
         /* PAM ends on white: show the same from kernel memory so PAM's
@@ -62,17 +62,17 @@ void demo_main(void)
         k_set_copper(white);
     }
     /* music 1 loads in the background while the title is shown */
-    k_preload(F_MUS1_BANK);
-    k_preload(F_MUS1_S0);
-    k_preload(F_PART_GLENZ);
+    k_preload_after(F_MUS1_BANK);
+    k_preload_after(F_MUS1_S0);
+    k_preload_after(F_PART_GLENZ);
     k_run_part(F_PART_BEGLOGO);
     /* ---- music 1 */
     k_music_load_bank(1, F_MUS1_BANK);
     k_music_play(1, F_MUS1_S0);
     k_music_free_bank(0);
-    k_preload(F_PART_TUNNELI);
+    k_preload_after(F_PART_TUNNELI);
     k_run_part(F_PART_GLENZ);
-    k_preload(F_PART_TECHNO);
+    k_preload_after(F_PART_TECHNO);
     k_run_part(F_PART_TUNNELI);
     k_run_part(F_PART_TECHNO);
     /* ---- disk 2 */
@@ -80,33 +80,33 @@ void demo_main(void)
         void k_need_disk(int n);
         k_need_disk(2);
     }
-    k_preload(F_PART_MNTSCRL);
+    k_preload_after(F_PART_MNTSCRL);
     k_run_part(F_PART_PANIC);
     /* original: wait until musplus goes below zero and back above */
     while (k_mus_plus() >= 0 && !k_mus_after(42, 1))
         k_waitvbl();
     while (k_mus_plus() <= 0 && !k_mus_after(42, 1))
         k_waitvbl();
-    k_preload(F_PART_LENS);
+    k_preload_after(F_PART_LENS);
     k_run_part(F_PART_MNTSCRL);
     k_set_copper(k_empty_copper);   /* frees MNTSCRL before LENS is unpacked */
-    k_preload(F_PART_PLZ);
+    k_preload_after(F_PART_PLZ);
     k_run_part(F_PART_LENS);
     solid(0xfff);
-    k_preload(F_PART_DOTS);
+    k_preload_after(F_PART_DOTS);
     k_run_part(F_PART_PLZ);
     solid(0);
-    k_preload(F_PART_WATER);
+    k_preload_after(F_PART_WATER);
     k_run_part(F_PART_DOTS);
     solid(0);
-    k_preload(F_PART_COMAN);
+    k_preload_after(F_PART_COMAN);
     k_run_part(F_PART_WATER);
     solid(0);
-    k_preload(F_PART_JPLOGO);
-    k_preload(F_MUS0_BANK2);
+    k_preload_after(F_PART_JPLOGO);
+    k_preload_after(F_MUS0_BANK2);
     k_run_part(F_PART_COMAN);
     solid(0);
-    k_preload(F_PART_U2E);
+    k_preload_after(F_PART_U2E);
     k_run_part(F_PART_JPLOGO);
     /* ---- music 0 again: JPLOGO ended on white */
     {
@@ -118,13 +118,13 @@ void demo_main(void)
         k_music_load_bank(0, F_MUS0_BANK2);
         k_music_play(0, F_MUS0_S18);
     }
-    k_preload(F_PART_ENDLOGO);
+    k_preload_after(F_PART_ENDLOGO);
     k_run_part(F_PART_U2E);
     solid(0xfff);
-    k_preload(F_PART_CRED);
+    k_preload_after(F_PART_CRED);
     k_run_part(F_PART_ENDLOGO);
     solid(0);
-    k_preload(F_PART_ENDSCRL);
+    k_preload_after(F_PART_ENDSCRL);
     k_run_part(F_PART_CRED);
     solid(0);
     k_run_part(F_PART_ENDSCRL);

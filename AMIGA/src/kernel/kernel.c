@@ -303,7 +303,8 @@ unsigned int k_unpack(const void *packed, void *dest) { return unlz(packed, dest
 u32 k_file_size(int id) { return k_dir[id].size; }
 
 #define MAXPRE 6
-/* state: 0 free, 1 pending (no memory yet), 2 loading/loaded */
+/* state: 0 free, 1 pending (no memory yet), 2 loading/loaded,
+ * 3 waiting for the next part to be unpacked */
 static struct { int id; int state; u8 *buf; volatile int done; } pre[MAXPRE];
 
 /* Starts pending preloads for which there is memory now (in order). */
@@ -336,6 +337,30 @@ void k_preload(int id)
             return;
         }
     }
+}
+
+/* Like k_preload, but the loading starts only after the next part has
+ * been unpacked (so big preloads do not fragment the memory it needs). */
+void k_preload_after(int id)
+{
+    int i;
+    for (i = 0; i < MAXPRE; i++) {
+        if (pre[i].state == 0) {
+            pre[i].id = id;
+            pre[i].state = 3;
+            pre[i].done = 0;
+            return;
+        }
+    }
+}
+
+static void release_after(void)
+{
+    int i;
+    for (i = 0; i < MAXPRE; i++)
+        if (pre[i].state == 3)
+            pre[i].state = 1;
+    preload_kick();
 }
 
 int k_preload_done(int id)
@@ -377,8 +402,8 @@ void *k_load_ex(int id, u32 extra, int tag)
     if (total < d->size + extra) total = d->size + extra;
     for (i = 0; i < MAXPRE; i++) {
         if (pre[i].state && pre[i].id == id) {
-            if (pre[i].state == 1) {
-                /* not started for lack of memory: load it directly */
+            if (pre[i].state == 1 || pre[i].state == 3) {
+                /* not started (no memory yet, or deferred): load it directly */
                 pre[i].state = 0;
                 break;
             }
@@ -455,6 +480,7 @@ void k_run_part(int id)
             h = (struct part_hdr *)f;
         }
     }
+    release_after();
     img = (u8 *)&h->rel[h->nrel];
     for (i = 0; i < h->nrel; i++)
         *(u32 *)(img + h->rel[i]) += (u32)img;

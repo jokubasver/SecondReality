@@ -48,6 +48,7 @@ extern volatile u32 k_loader_errors;
 void k_music_init(void);
 void k_music_start(const void *bank, const void *stream);
 void k_music_stop(void);
+void k_preload_after(int id);
 void k_music_tick(void);
 void k_music_dma(void);
 void k_music_slow(void);
