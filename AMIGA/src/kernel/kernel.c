@@ -237,13 +237,41 @@ static u32 find_gap(u32 size)
     return 0;
 }
 
+/* highest gap that fits (part images go to the top of memory so that
+ * the buffers of the part before, at the bottom, free one big area) */
+static u32 find_gap_high(u32 size)
+{
+    u32 pos = FREE_START, best = 0;
+    int i;
+    for (i = 0; i <= nblk; i++) {
+        u32 lim = i < nblk ? blk[i].start : CHIP_END;
+        if (lim >= pos && lim - pos >= size)
+            best = (lim - size) & ~7u;
+        if (i < nblk && blk[i].end > pos)
+            pos = (blk[i].end + 7) & ~7u;
+    }
+    return best;
+}
+
+static int alloc_high;
+
 void *k_alloc_tag(u32 size, int tag)
 {
     u32 p;
     int i, j;
     size = (size + 7) & ~7u;
     if (size == 0) size = 8;
-    p = find_gap(size);
+    p = alloc_high && tag == MEM_PART ? find_gap_high(size) : find_gap(size);
+    if (!p && old_pending && !old_hold) {
+        /* the previous part's display is still up: blank it to get its
+         * memory back */
+        cur_copper = k_empty_copper;
+        COP1LC = (u32)k_empty_copper;
+        k_waitvbl();
+        k_mem_free_tag(MEM_OLD);
+        old_pending = 0;
+        p = alloc_high && tag == MEM_PART ? find_gap_high(size) : find_gap(size);
+    }
     if (!p || nblk >= MAXBLK) {
         /* out of memory: crash screen with size, largest free block,
          * block count, phase and the block list */
@@ -490,6 +518,7 @@ void k_run_part(int id)
         /* read header size first (bss unknown until unpacked): allocate
          * generously using a second pass */
         PHASE(0x40000000 | id);
+        alloc_high = 1;
         f = k_load_ex(id, 0, MEM_PART);
         h = (struct part_hdr *)f;
         bss = h->bss;
@@ -501,6 +530,7 @@ void k_run_part(int id)
             f = g;
             h = (struct part_hdr *)f;
         }
+        alloc_high = 0;
     }
     release_after();
     img = (u8 *)&h->rel[h->nrel];
@@ -566,6 +596,8 @@ void k_music_play(int slot, int stream_id)
 /* ------------------------------------------------------------------ main */
 void demo_main(void);
 
+void k_check_chip(void);
+
 void kmain(void)
 {
     DMACON = 0x7fff;
@@ -577,6 +609,7 @@ void kmain(void)
     k_set_copper(k_empty_copper);
     COPJMP1 = 0;
     DMACON = DMAF_SETCLR | DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | DMAF_RASTER;
+    k_check_chip();
     k_loader_init();
     k_music_init();
     {
@@ -639,4 +672,35 @@ void k_need_disk(int n)
         k_waitvbl();
         COP1LC = (u32)prev;
     }
+}
+
+/* 512 KB chip machines mirror chip memory at 0x80000: say so instead of
+ * crashing when a part first uses the upper half. */
+void k_check_chip(void)
+{
+    volatile u32 *lo = (volatile u32 *)0x20000, *hi = (volatile u32 *)0xa0000;
+    u32 *c = diskcop;
+    *lo = 0x12345678;
+    *hi = 0x5a5aa5a5;
+    if (*hi == 0x5a5aa5a5 && *lo == 0x12345678)
+        return;
+    *c++ = CMOVE(R_DIWSTRT, 0x2c81);
+    *c++ = CMOVE(R_DIWSTOP, 0x2cc1);
+    *c++ = CMOVE(R_DDFSTRT, 0x0038);
+    *c++ = CMOVE(R_DDFSTOP, 0x00d0);
+    *c++ = CMOVE(R_BPL1MOD, 0);
+    *c++ = CMOVE(R_BPLCON1, 0);
+    *c++ = CMOVE(R_BPLCON0, 0x0200);
+    *c++ = CMOVE(R_COLOR00, 0x400);
+    *c++ = CMOVE(R_COLOR00 + 2, 0xfff);
+    *c++ = CMOVE(R_BPL1PTH, (u32)kmsg_chip >> 16);
+    *c++ = CMOVE(R_BPL1PTH + 2, (u32)kmsg_chip & 0xffff);
+    *c++ = CWAIT(0x2c + 120, 0x07);
+    *c++ = CMOVE(R_BPLCON0, 0x1200);
+    *c++ = CWAIT(0x2c + 120 + KMSG_H, 0x07);
+    *c++ = CMOVE(R_BPLCON0, 0x0200);
+    *c++ = CEND;
+    COP1LC = (u32)diskcop;
+    for (;;)
+        ;
 }

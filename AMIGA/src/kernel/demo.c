@@ -74,6 +74,7 @@ void demo_main(void)
     k_run_part(F_PART_GLENZ);
     k_preload_after(F_PART_TECHNO);
     k_run_part(F_PART_TUNNELI);
+    solid(0);
     k_run_part(F_PART_TECHNO);
     /* ---- disk 2 */
     {

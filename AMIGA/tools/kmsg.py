@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gfxconv
 
-def render(text, h=16, scale=2):
+def render(text, h=24, scale=2):
     font = ImageFont.load_default()
     im = Image.new('1', (160, h // scale), 0)
     d = ImageDraw.Draw(im)
@@ -18,5 +18,6 @@ out = sys.argv[1]
 H = gfxconv.Header('kmsg.h')
 H.array('kmsg_disk2', render('PLEASE INSERT DISK 2'))
 H.array('kmsg_disk1', render('PLEASE INSERT DISK 1'))
-H.define('KMSG_H', 16)
+H.array('kmsg_chip', render('NEEDS 1 MB CHIP RAM'))
+H.define('KMSG_H', 24)
 H.write(out)
