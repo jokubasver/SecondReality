@@ -45,7 +45,7 @@ void part_main(void)
     }
     k_set_copper(cop);
     k_waitvbl();
-    while (!k_exit() && k_mus_plus() < 0)
+    while (!k_exit() && k_mus_plus() < 0 && !k_mus_after(93, 0))
         k_waitvbl();
     t0 = k_frames;
     for (;;) {

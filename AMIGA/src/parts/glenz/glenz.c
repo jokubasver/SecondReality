@@ -419,7 +419,7 @@ void part_main(void)
     build_copper(0, 5);
     build_copper(1, 5);
 
-    while (!k_exit() && k_mus_plus() < -19)
+    while (!k_exit() && k_mus_plus() < -19 && !k_mus_after(2, 45))
         k_waitvbl();
     k_mus_frame = 0;
     zoomer();

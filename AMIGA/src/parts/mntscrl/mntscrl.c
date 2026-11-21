@@ -69,7 +69,7 @@ void part_main(void)
     }
     set_pal(64, 64);
     /* wait for the music */
-    while (!k_exit() && k_mus_plus() < 0)
+    while (!k_exit() && k_mus_plus() < 0 && !k_mus_after(42, 0))
         k_waitvbl();
     /* scroll: phase = 70 Hz frame count, one table per phase, the text
      * moves one pixel every three phases */

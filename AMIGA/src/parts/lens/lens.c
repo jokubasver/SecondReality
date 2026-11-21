@@ -405,7 +405,7 @@ void part_main(void)
     set_pal(31);
     k_set_copper(cop[0]);
     /* part 1: wait for the music, then reveal the picture */
-    while (!k_exit() && k_mus_plus() < -6) {
+    while (!k_exit() && k_mus_plus() < -6 && !k_mus_after(45, 58)) {
         tex_step(8);
         k_waitvbl();
     }
@@ -417,7 +417,7 @@ void part_main(void)
         k_waitvbl();
     }
     reveal(80);
-    while (!k_exit() && k_mus_plus() < -20) {
+    while (!k_exit() && k_mus_plus() < -20 && !k_mus_after(48, 44)) {
         tex_step(8);
         k_waitvbl();
     }

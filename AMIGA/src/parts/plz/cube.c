@@ -264,7 +264,7 @@ void cube_main(void)
     for (i = 0; i < 3; i++)
         ob[i][0] = 80, ob[i][1] = 0, ob[i][2] = CROWS, ob[i][3] = 0;
     k_set_copper(cop[0]);
-    while (!k_exit() && k_mus_plus() < 13)
+    while (!k_exit() && k_mus_plus() < 13 && !k_mus_after(68, 13))
         k_waitvbl();
     t0 = k_frames;
     for (;;) {

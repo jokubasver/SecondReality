@@ -142,7 +142,7 @@ void part_main(void)
             b ^= 1;
         }
     }
-    while (!k_exit() && k_mus_plus() < 4)
+    while (!k_exit() && k_mus_plus() < 4 && !k_mus_after(98, 4))
         k_waitvbl();
     /* the bounce */
     t0 = k_frames;

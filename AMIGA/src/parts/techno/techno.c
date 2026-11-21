@@ -27,10 +27,12 @@ static int sin255(int a) { return muls16(k_sin(a), 255) >> 14; }
 
 /* time in 70 Hz frames */
 static u32 tbase;
+static int done70;
+/* 70 Hz frames since the last call (tbase = start, reset done70 with it) */
 static int steps70(void)
 {
-    int n = (k_frames - tbase) * 7 / 5;
-    tbase += n * 5 / 7;
+    int n = (k_frames - tbase) * 7 / 5 - done70;
+    done70 += n;
     return n;
 }
 
@@ -126,7 +128,7 @@ static void interference(void)
     int sinuspower = 0, powercnt = 0, phase = 0, n;
     cop[0] = k_alloc(800 * 4);
     cop[1] = k_alloc(800 * 4);
-    tbase = k_frames;
+    tbase = k_frames; done70 = 0;
     k_mus_frame = 0;
     for (;;) {
         n = steps70();
@@ -245,12 +247,12 @@ static void columns(void)
     bplane = k_alloc(40 * H);
     memset(bplane, 0xff, 40 * H);
     simple_screen(bplane, 0, rgb6(63, 63, 63));
-    while (!k_exit() && k_mus_plus() < -3)
+    while (!k_exit() && k_mus_plus() < -3 && !k_mus_after(24, 61))
         k_waitvbl();
     mus_wait_beat();
     for (b = 0; b < 4 && !k_exit(); b++) {
         int zy = 0, zya = 0, zly, y;
-        tbase = k_frames;
+        tbase = k_frames; done70 = 0;
         for (a = 256; a > -400 && !k_exit();) {
             int n = steps70();
             while (n-- > 0 && a > -400) {
@@ -386,7 +388,7 @@ static void bars(int mode, int count)
 {
     int rot = mode == 1 ? 45 : (mode == 2 ? 50 : 45), rota = 10;
     int vm = mode == 1 ? 50 : 100 * 64, vma = 0, rot2 = 0, xpos = 320, xposa = 0;
-    tbase = k_frames;
+    tbase = k_frames; done70 = 0;
     while (!k_exit() && count > 0) {
         int n = steps70(), wx = 160, wy = 100, b;
         if (n < 1) {
@@ -478,7 +480,7 @@ static void troll_part(void)
     while (!k_exit() && !(k_mus_order > 35 || (k_mus_order == 35 && k_mus_row > 48)))
         k_waitvbl();
     count = 300;
-    tbase = k_frames;
+    tbase = k_frames; done70 = 0;
     while (!k_exit() && count > 0 && xpos != 320) {
         int n = steps70();
         count -= n;
@@ -521,7 +523,7 @@ static void troll_part(void)
         memcpy(k_msg[3], troll_pal + 64, 32);
     }
     count = 420;
-    tbase = k_frames;
+    tbase = k_frames; done70 = 0;
     while (!k_exit() && count > 0) {
         int a = k_mus_plus();
         if (a > -6 && a < 16) break;
@@ -532,7 +534,7 @@ static void troll_part(void)
 
 void part_main(void)
 {
-    while (!k_exit() && k_mus_plus() < -4)
+    while (!k_exit() && k_mus_plus() < -4 && !k_mus_after(18, 60))
         k_waitvbl();
     interference();
     columns();

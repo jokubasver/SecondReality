@@ -83,9 +83,9 @@ void demo_main(void)
     k_preload(F_PART_MNTSCRL);
     k_run_part(F_PART_PANIC);
     /* original: wait until musplus goes below zero and back above */
-    while (k_mus_plus() >= 0)
+    while (k_mus_plus() >= 0 && !k_mus_after(42, 1))
         k_waitvbl();
-    while (k_mus_plus() <= 0)
+    while (k_mus_plus() <= 0 && !k_mus_after(42, 1))
         k_waitvbl();
     k_preload(F_PART_LENS);
     k_run_part(F_PART_MNTSCRL);

@@ -272,6 +272,13 @@ void k_music_skip_to(int order)
     silence();
 }
 
+/* nonzero once the music is at or past order o, row r: marker waits use
+ * it so a part that comes a little late does not wait a whole cycle */
+int k_mus_after(int o, int r)
+{
+    return k_mus_order > o || (k_mus_order == o && k_mus_row >= r);
+}
+
 int k_mus_plus(void)
 {
     int row = k_mus_row, d;

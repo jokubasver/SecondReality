@@ -41,6 +41,7 @@ extern volatile s32 k_mus_frame;         /* music tick counter (settable) */
 extern volatile u8 k_mus_volume;         /* master volume 0..64 */
 /* dis_musplus(): -32..31 position relative to the nearest "+++" marker. */
 int k_mus_plus(void);
+int k_mus_after(int order, int row);   /* music at or past order/row */
 int k_mus_playing(void);
 
 /* ---- memory ------------------------------------------------------------ */

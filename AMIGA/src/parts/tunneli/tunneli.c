@@ -92,8 +92,7 @@ void part_main(void)
         k_set_copper(cop[cur]);
         k_waitvbl();
         /* advance the tunnel one ring per 70 Hz frame */
-        steps = (k_frames - last) * 7 / 5;
-        last += steps * 5 / 7;
+        steps = (k_frames - last) * 7 / 5 - frame;     /* last = start */
         while (steps-- > 0) {
             putki[100].x = cosit[sy & 2047] - sinit[(sy * 3) & 4095] - cosit[sx & 2047];
             putki[100].y = sinit[(sx * 2) & 4095] - cosit[sx & 2047];

@@ -78,7 +78,7 @@ void part_main(void)
     *c++ = CEND;
     set_pal(0);
     k_set_copper(cop);
-    while (!k_exit() && k_mus_plus() < 0)
+    while (!k_exit() && k_mus_plus() < 0 && !k_mus_after(88, 0))
         k_waitvbl();
     co = k_mus_order;
     /* fade in (one step every 2 VGA frames) */

@@ -205,7 +205,7 @@ void part_main(void)
         coltab[i] = 0xfff;
     k_set_copper(cop);
     { extern volatile u32 k_dbg_phase; k_dbg_phase = 0x5300000f; }
-    while (!k_exit() && k_mus_plus() < 0)
+    while (!k_exit() && k_mus_plus() < 0 && !k_mus_after(62, 0))
         k_waitvbl();
     k_mus_frame = 0;
     /* first palette: from white (the 6 bit wrap of the original) */
