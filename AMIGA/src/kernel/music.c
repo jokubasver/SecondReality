@@ -180,6 +180,12 @@ again:
         k_mus_row = sp[1];
         k_mus_plusflags = sp[2];
         sp += 3;
+#ifdef DEBUG_OVERLAY
+        {
+            extern volatile u32 k_dbg_val;
+            k_dbg_val = ((u32)k_mus_order << 8) | k_mus_row;
+        }
+#endif
     }
     for (ch = 0; ch < 4; ch++) {
         u8 cf;
