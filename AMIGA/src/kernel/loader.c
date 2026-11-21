@@ -35,6 +35,11 @@ static struct {
 static struct load_req queue[QSIZE];
 static volatile int q_head, q_tail;
 
+/* WHDLoad: both disk images in memory (set before bss is cleared, so
+ * they live in .data) */
+u8 *k_ramdisk __attribute__((section(".data"))) = 0;
+#define RAM_CHUNK 12288                /* bytes copied per frame */
+
 volatile int k_loader_wanted_disk;   /* nonzero while waiting for a disk swap */
 volatile u32 k_loader_errors;
 
@@ -204,6 +209,17 @@ void k_loader_step(void)
     }
     L.idle_frames = 0;
     r = &queue[q_head];
+
+    if (k_ramdisk) {
+        u32 n = r->len > RAM_CHUNK ? RAM_CHUNK : r->len;
+        memcpy(r->dest, k_ramdisk + (u32)(r->disk - 1) * 901120 + r->offset, n);
+        r->dest += n;
+        r->offset += n;
+        r->len -= n;
+        L.disk = r->disk;
+        if (r->len == 0) goto finished;
+        return;
+    }
 
     switch (L.state) {
     case S_IDLE:

@@ -5,7 +5,8 @@ Build script for the Second Reality Amiga port.
   python3 build.py            build everything -> build/SecondReality1.adf, ...2.adf
   python3 build.py --test X   boot straight into part X (for quick testing)
 """
-import os, sys, subprocess, struct, glob, argparse
+import os
+import shutil, sys, subprocess, struct, glob, argparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 B = os.path.join(ROOT, 'build')
@@ -172,6 +173,32 @@ def make_disks():
             print('%s: %d of %d bytes used (%.0f%%)' % (p, pos[n], ADF_SIZE, 100.0 * pos[n] / ADF_SIZE))
 
 
+def asm_bin(src, out, syms=()):
+    o = out + '.o'
+    args = [AS, '-m68000', '--register-prefix-optional']
+    for k, v in syms:
+        args += ['--defsym', '%s=%d' % (k, v)]
+    run(args + ['-o', o, src])
+    run([OBJCOPY, '-O', 'binary', o, out])
+    return open(out, 'rb').read()
+
+
+def build_whdload():
+    """WHDLoad slave (hunk executable) and the install directory."""
+    code = asm_bin(os.path.join(ROOT, 'src/whdload/slave.S'), os.path.join(B, 'slave.bin'))
+    code += bytes(-len(code) % 4)
+    n = len(code) // 4
+    hunk = struct.pack('>IIIIII', 0x3f3, 0, 1, 0, 0, n) + struct.pack('>II', 0x3e9, n) + code + \
+        struct.pack('>I', 0x3f2)
+    d = os.path.join(B, 'whdload', 'SecondReality')
+    os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, 'SecondReality.slave'), 'wb').write(hunk)
+    for i in (1, 2):
+        shutil.copyfile(os.path.join(B, 'SecondReality%d.adf' % i), os.path.join(d, 'disk.%d' % i))
+    shutil.copyfile(os.path.join(ROOT, 'src/whdload/ReadMe'), os.path.join(d, 'ReadMe'))
+    print('%s: WHDLoad install (slave %d bytes)' % (d, len(hunk)))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--test', help='start directly with this part')
@@ -206,6 +233,7 @@ def main():
     for p in PARTS:
         build_part(p, defs)
     make_disks()
+    build_whdload()
 
 
 if __name__ == '__main__':

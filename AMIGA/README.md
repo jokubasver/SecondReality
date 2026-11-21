@@ -30,6 +30,24 @@ Disk 1 holds the kernel, music 0 (intro) and music 1, and the parts up to
 TECHNO; disk 2 holds the rest and music 0 again for the end.  With one
 drive the demo asks for disk 2; with a second drive it reads DF1.
 
+## WHDLoad
+
+The build also writes `build/whdload/SecondReality` (`SecondReality.slave`,
+`disk.1`, `disk.2`, `ReadMe`).  The slave (`src/whdload/slave.S`) loads both
+disk images into ExpMem (1.8 MB), copies the kernel to 0x400 and enters it
+at 0x408; the kernel then reads files from memory instead of the drive.
+F10 quits; the demo returns to WHDLoad after the end scroller.
+
+`tools/whdtest.py` builds `build/whdtest.adf`, a boot disk that stands in
+for WHDLoad in the emulator (reads the two ADFs from DF1/DF2 into fast
+memory and calls the slave):
+
+    python3 tools/whdtest.py
+    FAST_MEM=8192 EMU_ARGS="--floppy_drive_1=build/SecondReality1.adf \
+      --floppy_drive_2=build/SecondReality2.adf" tools/emu.sh build/whdtest.adf w 100
+
+Release files are in `dist/`.
+
 ## Structure
 
 - `src/kernel`: boot block, kernel (interrupts, trackloader, LZ unpacker,

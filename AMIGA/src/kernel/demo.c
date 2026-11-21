@@ -128,6 +128,12 @@ void demo_main(void)
     k_run_part(F_PART_CRED);
     solid(0);
     k_run_part(F_PART_ENDSCRL);
+    {
+        extern void *k_whd_resload;
+        void k_whd_quit(void);
+        if (k_whd_resload)
+            k_whd_quit();
+    }
     for (;;)
         k_waitvbl();
 #endif

@@ -1,0 +1,22 @@
+Second Reality - Amiga OCS/ECS port, WHDLoad install
+====================================================
+
+Files:
+  SecondReality.slave   WHDLoad slave
+  disk.1, disk.2        the two disk images (same as the ADFs)
+
+Start from a shell with:
+  WHDLoad SecondReality.slave
+
+or from any WHDLoad launcher.  No icon is included; to make one, copy any
+WHDLoad project icon, name it SecondReality.info and set its tooltype
+Slave=SecondReality.slave.
+
+Requirements:
+  - WHDLoad 10 or newer
+  - 1 MB chip memory (the demo is written for 1 MB chip, OCS/ECS)
+  - about 1.8 MB of other memory (the slave keeps both disk images in
+    memory, so the demo never waits for a disk or asks for disk 2)
+
+Quit with F10 at any time (or the quit key set in WHDLoad); the demo also
+returns to WHDLoad by itself after the end scroller.

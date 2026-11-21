@@ -9,6 +9,25 @@
 	.section .text.start,"ax"
 	.globl	_start
 _start:
+	bra.w	os_start
+	.ascii	"WHDK"
+| WHDLoad entry (0x408): the slave has copied the image to its link address
+| and calls us in supervisor mode with a0 = disk images (ExpMem), a1 =
+| resload base, d0 = quit key.
+whd_entry:
+	move.w	#0x2700,sr
+	move.l	a0,k_ramdisk
+	move.l	a1,k_whd_resload
+	move.b	d0,k_whd_quitkey
+	lea	0xdff000,a0
+	move.w	#0x7fff,0x9a(a0)
+	move.w	#0x7fff,0x9c(a0)
+	move.w	#0x7fff,0x96(a0)
+	move.w	#0x7f00,0x9e(a0)
+	move.b	#0x7f,0xbfed01
+	move.b	#0x7f,0xbfdd00
+	jmp	kentry
+os_start:
 	lea	super(pc),a5
 	jsr	-30(a6)			| exec Supervisor()
 super:
@@ -163,6 +182,13 @@ k_set_ipl:
 	or.w	#0x2000,d0
 	move.w	d0,sr
 	rts
+
+| void k_whd_quit(void) -- returns to WHDLoad (resload_Abort, TDREASON_OK)
+	.globl	k_whd_quit
+k_whd_quit:
+	move.l	k_whd_resload,a0
+	pea	-1.w
+	jmp	4(a0)
 
 | int k_get_sr(void)
 	.globl	k_get_sr

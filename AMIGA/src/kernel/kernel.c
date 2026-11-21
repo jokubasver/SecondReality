@@ -28,9 +28,26 @@ struct dir_entry k_dir[DIR_MAX] __attribute__((section(".data.dir"))) = { { 0xee
 /* ------------------------------------------------------------- interrupts */
 static volatile int slow_busy;
 
+void *k_whd_resload __attribute__((section(".data"))) = 0;
+u8 k_whd_quitkey __attribute__((section(".data"))) = 0;
+void k_whd_quit(void);
+
 void k_level2(void)
 {
-    (void)CIAA_ICR;
+    u8 icr = CIAA_ICR;
+    if ((icr & 8) && k_whd_resload) {
+        /* keyboard: acknowledge, quit to WHDLoad on the quit key */
+        u8 k = ~CIAA_SDR;
+        u16 l;
+        k = (k >> 1) | (k << 7);
+        CIAA_CRA |= 0x40;
+        l = VHPOSR >> 8;
+        while ((u8)((VHPOSR >> 8) - l) < 3)
+            ;
+        CIAA_CRA &= ~0x40;
+        if (k == k_whd_quitkey)
+            k_whd_quit();
+    }
     INTREQ = INTF_PORTS;
     INTREQ = INTF_PORTS;
 }
@@ -567,6 +584,10 @@ void kmain(void)
         k_eclock_init();
     }
     INTENA = INTF_SETCLR | INTF_INTEN | INTF_VERTB | INTF_EXTER;
+    if (k_whd_resload) {
+        CIAA_ICR = 0x88;               /* keyboard (serial port) interrupt */
+        INTENA = INTF_SETCLR | INTF_PORTS;
+    }
     k_set_ipl(0);
     demo_main();
     for (;;)
