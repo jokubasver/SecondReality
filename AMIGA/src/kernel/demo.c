@@ -101,7 +101,13 @@ void demo_main(void)
         k_music_load_bank(0, F_MUS0_BANK2);
         k_music_play(0, F_MUS0_S18);
     }
+    k_preload(F_PART_ENDLOGO);
     k_run_part(F_PART_U2E);
+    k_preload(F_PART_CRED);
+    k_run_part(F_PART_ENDLOGO);
+    k_preload(F_PART_ENDSCRL);
+    k_run_part(F_PART_CRED);
+    k_run_part(F_PART_ENDSCRL);
     for (;;)
         k_waitvbl();
 #endif

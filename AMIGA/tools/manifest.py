@@ -7,7 +7,7 @@ MUSIC = [
 ]
 
 # part directories under src/parts
-PARTS = ['test', 'alku', 'u2a', 'pam', 'beglogo', 'glenz', 'tunneli', 'techno', 'panic', 'mntscrl', 'lens', 'plz', 'dots', 'water', 'coman', 'jplogo', 'u2e']
+PARTS = ['test', 'alku', 'u2a', 'pam', 'beglogo', 'glenz', 'tunneli', 'techno', 'panic', 'mntscrl', 'lens', 'plz', 'dots', 'water', 'coman', 'jplogo', 'u2e', 'endlogo', 'cred', 'endscrl']
 
 # (id, path, packing: lz | delta | store, disk)
 FILES = [
@@ -33,6 +33,9 @@ FILES = [
     ('PART_COMAN', 'build/parts/coman.prt', 'lz', 2),
     ('PART_JPLOGO', 'build/parts/jplogo.prt', 'lz', 2),
     ('PART_U2E', 'build/parts/u2e.prt', 'lz', 2),
+    ('PART_ENDLOGO', 'build/parts/endlogo.prt', 'lz', 2),
+    ('PART_CRED', 'build/parts/cred.prt', 'lz', 2),
+    ('PART_ENDSCRL', 'build/parts/endscrl.prt', 'lz', 2),
     ('MUS0_BANK2', 'build/music/mus0.smp', 'delta', 2),
     ('MUS0_S18', 'build/music/mus0_18.str', 'store', 2),
 ]
