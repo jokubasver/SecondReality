@@ -22,7 +22,10 @@ def main(elfpath, out):
     bss = f.get_section_by_name('.bss')
     if bss is not None and bss['sh_size']:
         if len(image) < bss['sh_addr']: image += bytes(bss['sh_addr'] - len(image))
-        bsssize = bss['sh_size']
+        # stored as zeros (they pack to almost nothing): the kernel then
+        # needs no second, larger copy of the part when loading it
+        image += bytes(bss['sh_size'])
+        bsssize = 0
     else:
         bsssize = 0
     symtab = f.get_section_by_name('.symtab')

@@ -19,6 +19,7 @@ static volatile int dbg_overlay = 0;
 #endif
 void (*volatile k_vbl_hook)(void);
 void (*volatile k_copper_hook)(void);
+void (*volatile k_blit_hook)(void);
 u8 k_msg[4][64];
 
 /* patched by the disk builder (tools/mkdisk.py) */
@@ -46,6 +47,8 @@ void k_level3(void)
     if (r & INTF_BLIT) {
         INTREQ = INTF_BLIT;
         INTREQ = INTF_BLIT;
+        if (k_blit_hook)
+            k_blit_hook();
     }
     if (r & INTF_VERTB) {
         INTREQ = INTF_VERTB;
@@ -232,9 +235,14 @@ void *k_alloc_tag(u32 size, int tag)
         info[1] = k_mem_free_largest();
         info[2] = nblk;
         info[3] = k_dbg_phase;
+        /* blocks: start | tag << 28 in the register area, sizes below */
         for (k = 0; k < 12 && k < nblk; k++)
-            info[4 + k] = (blk[k].start & 0xfffff) | ((u32)blk[k].tag << 24) |
-                          (((blk[k].end - blk[k].start) >> 12) << 20);
+            info[4 + k] = blk[k].start | ((u32)blk[k].tag << 28);
+        for (k = 0; k < 16 && k < nblk; k++) {
+            u32 sz = blk[k].end - blk[k].start;
+            fr[k * 2 + 7] = sz >> 16;
+            fr[k * 2 + 8] = sz;
+        }
         k_panic(0xee, info, fr);
     }
     for (i = 0; i < nblk && blk[i].start < p; i++)
@@ -458,6 +466,7 @@ void k_run_part(int id)
     k_vbl_hook = NULL;
     k_copper_hook = NULL;
     INTENA = INTF_COPER | INTF_BLIT;
+    k_blit_hook = NULL;
     k_wait_blitter();
     /* keep the part's memory (its last copper list may still be shown)
      * until the next part sets up its own display */

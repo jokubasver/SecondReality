@@ -23,6 +23,9 @@ void k_waitline(int y);
 /* User hooks, called from the level 3 interrupt. */
 extern void (*volatile k_vbl_hook)(void);
 extern void (*volatile k_copper_hook)(void);
+/* Called from the blitter-finished interrupt; the part enables it with
+ * INTENA = INTF_SETCLR | INTF_BLIT (switched off again when it returns). */
+extern void (*volatile k_blit_hook)(void);
 
 /* ---- part control ------------------------------------------------------ */
 /* Nonzero if the part should end (left mouse button, debug builds only). */

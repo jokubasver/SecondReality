@@ -43,6 +43,12 @@ void demo_main(void)
 #endif
     k_preload(F_PART_BEGLOGO);
     k_run_part(F_PART_PAM);
+    {
+        /* PAM ends on white: show the same from kernel memory so PAM's
+         * buffers are released before the title is unpacked */
+        static u32 white[4] = { CMOVE(R_BPLCON0, 0x0200), CMOVE(R_COLOR00, 0xfff), CEND, CEND };
+        k_set_copper(white);
+    }
     /* music 1 loads in the background while the title is shown */
     k_preload(F_MUS1_BANK);
     k_preload(F_MUS1_S0);
@@ -69,7 +75,10 @@ void demo_main(void)
         k_waitvbl();
     while (k_mus_plus() <= 0)
         k_waitvbl();
+    k_preload(F_PART_LENS);
     k_run_part(F_PART_MNTSCRL);
+    k_set_copper(k_empty_copper);   /* frees MNTSCRL before LENS is unpacked */
+    k_run_part(F_PART_LENS);
     for (;;)
         k_waitvbl();
 #endif
