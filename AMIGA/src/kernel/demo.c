@@ -78,7 +78,9 @@ void demo_main(void)
     k_preload(F_PART_LENS);
     k_run_part(F_PART_MNTSCRL);
     k_set_copper(k_empty_copper);   /* frees MNTSCRL before LENS is unpacked */
+    k_preload(F_PART_PLZ);
     k_run_part(F_PART_LENS);
+    k_run_part(F_PART_PLZ);
     for (;;)
         k_waitvbl();
 #endif
