@@ -84,7 +84,9 @@ void demo_main(void)
     k_run_part(F_PART_PLZ);
     k_preload(F_PART_WATER);
     k_run_part(F_PART_DOTS);
+    k_preload(F_PART_COMAN);
     k_run_part(F_PART_WATER);
+    k_run_part(F_PART_COMAN);
     for (;;)
         k_waitvbl();
 #endif

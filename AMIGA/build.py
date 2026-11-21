@@ -41,14 +41,15 @@ def newer(target, deps):
 
 def compile_dir(srcs, objdir, extra=()):
     os.makedirs(objdir, exist_ok=True)
-    hdrs = glob.glob(os.path.join(ROOT, 'src/kernel/*.h')) + glob.glob(os.path.join(B, 'gen/*.h'))
+    hdrs = (glob.glob(os.path.join(ROOT, 'src/kernel/*.h')) + glob.glob(os.path.join(B, 'gen/*.h')) +
+            glob.glob(os.path.join(B, 'gen/*.i')))
     objs = []
     for s in srcs:
         o = os.path.join(objdir, os.path.basename(s).rsplit('.', 1)[0] + '.o')
         deps = [s] + hdrs + glob.glob(os.path.join(os.path.dirname(s), '*.h')) + glob.glob(os.path.join(ROOT, 'src/common/*'))
         if newer(o, deps):
             if s.endswith('.S'):
-                run([AS, '-m68000', '--register-prefix-optional', '-o', o, s])
+                run([AS, '-m68000', '--register-prefix-optional', '-I', os.path.join(B, 'gen'), '-o', o, s])
             else:
                 run([CC] + CFLAGS + list(extra) + ['-I' + os.path.dirname(s), '-c', '-o', o, s])
         objs.append(o)
