@@ -82,7 +82,9 @@ void demo_main(void)
     k_run_part(F_PART_LENS);
     k_preload(F_PART_DOTS);
     k_run_part(F_PART_PLZ);
+    k_preload(F_PART_WATER);
     k_run_part(F_PART_DOTS);
+    k_run_part(F_PART_WATER);
     for (;;)
         k_waitvbl();
 #endif
