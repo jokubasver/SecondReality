@@ -56,3 +56,57 @@ fill(4, [(T[63 - a * 64 // 75],) * 3 for a in range(1, 75)] + [(0, 0, 0)] * 106 
      [(T[a * 64 // 75] * 8 // 10, T[a * 64 // 75] * 9 // 10, T[a * 64 // 75]) for a in range(75)])
 H.array('plzpal', [v for p in pals for v in p[:768]])
 H.write(out)
+
+# ---------------------------------------------------------------- the cube
+def dbwords(name):
+    b = []
+    for line in open(os.path.join(SRC, name), encoding='latin1'):
+        line = line.strip()
+        if line.lower().startswith('db'):
+            b += [int(x) for x in line[2:].split(',') if x.strip()]
+    return [((b[i] | b[i + 1] << 8) ^ 0x8000) - 0x8000 for i in range(0, len(b) - 1, 2)]
+
+sinit = dbwords('SINIT.INC')
+H2 = gfxconv.Header('cube_data.h')
+H2.array('sinit', sinit[:1280], 's16')
+coef = inc('SPLINE.INC', 'dw')
+H2.array('splcoef', coef, 's16')
+rata = []
+kkk = 100
+for line in open(os.path.join(SRC, 'RATA.INC'), encoding='latin1'):
+    line = line.split(';')[0].strip()
+    if line.lower().startswith('dw'):
+        rata += [int(eval(x.replace('kkk', str(kkk)))) for x in line[2:].split(',') if x.strip()]
+H2.array('rata', rata, 's16')
+H2.define('RATAN', len(rata) // 8)
+
+# VECT/PLZFILL textures: kuva[y][x] = sini[(y*4 + sini[x*2]) & 511]/4 + 32,
+# as level*4 (10 shade levels per face colour) for the C2P tables
+def cdiv(a, b):
+    q = abs(a) // abs(b)
+    return q if (a >= 0) == (b > 0) else -q
+sini = [int(math.sin(a / 1024.0 * math.pi * 4) * 127) for a in range(1524)]
+LV = 10
+def level(v):
+    if v <= 0: return 0
+    return min(LV - 1, ((v - 1) * LV) // 63)
+tex = []
+for y in range(128):
+    for x in range(256):
+        v = cdiv(sini[(y * 4 + sini[x * 2]) & 511], 4) + 32 if y < 64 else 0
+        tex.append(level(v) * 4)
+H2.array('ktex', tex)
+H2.array('kdist', [cdiv(sini[y * 8], 3) & 255 for y in range(128)])
+# representative texture value of each level
+H2.array('klev', [min(63, 1 + (L * 63 + 63 // 2) // LV) for L in range(LV)])
+H2.define('NLEV', LV)
+# face palettes (PLZFILL.C initvect), 3 x 64 entries, 6 bit
+pal = [0] * 576
+for a in range(1, 32): pal[a * 3:a * 3 + 3] = [0, 0, a * 2]
+for a in range(32): pal[(a + 32) * 3:(a + 32) * 3 + 3] = [a * 2, a * 2, 63]
+for a in range(32): pal[192 + a * 3:192 + a * 3 + 3] = [a * 2, 0, 0]
+for a in range(32): pal[192 + (a + 32) * 3:192 + (a + 32) * 3 + 3] = [63, a * 2, 0]
+for a in range(32): pal[384 + a * 3:384 + a * 3 + 3] = [a, 0, a * 2 // 3]
+for a in range(32): pal[384 + (a + 32) * 3:384 + (a + 32) * 3 + 3] = [31 - a, a * 2, 21]
+H2.array('cpal', pal)
+H2.write(out)
