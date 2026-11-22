@@ -39,7 +39,7 @@ txt = []
 for x in range(640):
     col = 0
     for y in range(31):
-        if d[778 + y * 640 + x] >= 3:
+        if d[778 + y * 640 + x] >= 1:      # the original lights every font pixel
             col |= 1 << y
     txt.append(col)
 H.array('textcols', txt, 'u32', 4)
