@@ -118,7 +118,7 @@ resload:
 	.rept	6
 	bra.w	r_bad			| 8..28
 	.endr
-	bra.w	r_rts			| 32 FlushCache
+	bra.w	r_flush			| 32 FlushCache
 	bra.w	r_bad			| 36 GetFileSize
 	bra.w	r_disk			| 40 DiskLoad
 	.rept	8
@@ -126,6 +126,14 @@ resload:
 	.endr
 
 r_rts:	rts
+| 68020/030 only (what the emulator test uses)
+r_flush:
+	move.l	d0,-(sp)
+	.word	0x4e7a,0x0002		| movec cacr,d0
+	or.w	#0x0808,d0
+	.word	0x4e7b,0x0002		| movec d0,cacr
+	move.l	(sp)+,d0
+	rts
 r_disk:	movem.l	d1-d2/a1,-(sp)
 	move.l	images(pc),a1
 	cmp.l	#1,d2

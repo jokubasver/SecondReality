@@ -407,6 +407,7 @@ void part_main(void)
     int oxp = 0, oyp = 0, ozp = 0, oxb = 0, oyb = 0, ozb = 0;
     int frame = 0, a, b, i;
     u32 last;
+    int done70 = 0;
     s16 m[18];
     int clear_planes = 3;
 
@@ -438,9 +439,11 @@ void part_main(void)
         int repeat, plate_clear_from = -1;
         a = k_mus_plus();
         if (a < 0 && a > -16) break;
-        repeat = (k_frames - last) * 7 / 5;
-        if (repeat < 1) repeat = 1;
-        last += repeat * 5 / 7;
+        /* 70 Hz steps since the start, counted exactly (a fast CPU draws
+         * more often than that: wait for the next step) */
+        while ((repeat = (k_frames - last) * 7 / 5 - done70) < 1 && !k_exit())
+            k_waitvbl();
+        done70 += repeat;
         while (repeat--) {
             frame++;
             rx += 32; ry += 7;

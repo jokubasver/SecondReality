@@ -259,6 +259,7 @@ static void zoom_setup(int x, int y, int xa, int ya)
     s32 xadd = (s32)xa << 6, yadd = (s32)ya << 6;
     /* cell k samples column 2k+1 of the original 160 */
     zoom_patch(yadd, -xadd, yadd * 2, -xadd * 2);
+    k_flush_cache();
     /* aspect ratio *307/256, rows are ZLINES lines instead of 2 */
     xadd = (xadd * (307 * ZLINES / 2)) >> 8;
     yadd = (yadd * (307 * ZLINES / 2)) >> 8;

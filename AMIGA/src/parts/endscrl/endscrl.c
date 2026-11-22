@@ -22,7 +22,7 @@ void part_main(void)
     static u8 tline[100];
     u32 *cop, *c, t0, ph = 0;
     const u8 *tp = etext;
-    int i, yscrl = 0, line = 0, chars = 0, tstart = 0;
+    int i, yscrl = 0, line = 0, chars = 0, tstart = 0, endrows = 0;
     buf = k_alloc(PL * 2);
     cop = k_alloc(32 * 4);
     c = cop;
@@ -48,11 +48,14 @@ void part_main(void)
     *c++ = CEND;
     k_set_copper(cop);
     t0 = k_frames;
-    while (!k_exit()) {
+    while (!k_exit() && endrows <= R + FONAY) {
         u32 now = (k_frames - t0) * 7 / 10;     /* one pixel row per 2 VGA frames */
         while (ph < now) {
             int a, x, b;
             ph++;
+            /* text done: stop once the last line has scrolled out */
+            if (endrows || !*tp)
+                endrows++;
             if (line == 0) {
                 /* next text line, centred in 640 pixels */
                 chars = 0;

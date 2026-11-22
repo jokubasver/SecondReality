@@ -537,6 +537,7 @@ void k_run_part(int id)
     for (i = 0; i < h->nrel; i++)
         *(u32 *)(img + h->rel[i]) += (u32)img;
     memset(img + h->image, 0, bss);
+    k_flush_cache();
     entry = (void (*)(void))(img + h->entry);
     k_vbl_hook = NULL;
     k_copper_hook = NULL;

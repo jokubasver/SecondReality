@@ -26,12 +26,14 @@ whd_entry:
 	move.w	#0x7f00,0x9e(a0)
 	move.b	#0x7f,0xbfed01
 	move.b	#0x7f,0xbfdd00
+	moveq	#0,d7			| WHDLoad manages the caches
 	jmp	kentry
 os_start:
 	lea	super(pc),a5
 	jsr	-30(a6)			| exec Supervisor()
 super:
 	move.w	#0x2700,sr
+	move.w	0x128(a6),d7		| exec AttnFlags: CPU type, kept for kentry
 	lea	0xdff000,a0
 	move.w	#0x7fff,0x9a(a0)	| INTENA: all off
 	move.w	#0x7fff,0x9c(a0)	| INTREQ: clear
@@ -85,6 +87,20 @@ kentry:
 	clr.w	(a0)+
 	bra.s	1b
 2:
+	move.w	d7,k_cpu_flags
+	| 68020+: instruction cache only (the blitter and disk DMA write chip
+	| memory behind a data cache's back)
+	btst	#1,d7
+	beq.s	6f
+	btst	#3,d7
+	bne.s	7f
+	move.l	#0x0809,d0		| 020/030: clear + enable I-cache, D-cache off
+	.word	0x4e7b,0x0002		| movec d0,cacr
+	bra.s	6f
+7:	.word	0xf4f8			| 040/060: cpusha bc
+	move.l	#0x8000,d0		| I-cache on, D-cache off
+	.word	0x4e7b,0x0002		| movec d0,cacr
+6:
 	| install exception vectors
 	lea	exc_vec_table,a0
 3:	move.l	(a0)+,d0
@@ -189,6 +205,32 @@ k_whd_quit:
 	move.l	k_whd_resload,a0
 	pea	-1.w
 	jmp	4(a0)
+
+| void k_flush_cache(void) -- after code was written (part relocation,
+| patched code): needed on 68020+ and on JIT emulators such as Emu68
+	.globl	k_flush_cache
+k_flush_cache:
+	move.l	k_whd_resload,d0
+	beq.s	1f
+	move.l	d0,a0
+	jmp	32(a0)			| resload_FlushCache
+1:	move.w	k_cpu_flags,d0
+	btst	#1,d0
+	beq.s	3f			| 68000/010: no caches
+	btst	#3,d0
+	bne.s	2f
+	.word	0x4e7a,0x0002		| movec cacr,d0
+	or.w	#0x0808,d0		| clear instruction and data caches
+	.word	0x4e7b,0x0002		| movec d0,cacr
+	rts
+2:	.word	0xf4f8			| cpusha bc
+3:	rts
+
+	.bss
+	.globl	k_cpu_flags
+	.even
+k_cpu_flags: .skip 2
+	.text
 
 | int k_get_sr(void)
 	.globl	k_get_sr

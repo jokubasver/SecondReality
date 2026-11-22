@@ -76,6 +76,7 @@ extern u32 k_empty_copper[];
 void k_blit_copy(const void *src, int smod, void *dst, int dmod, int w, int h, int shift);
 void k_blit_or(const void *src, int smod, void *dst, int dmod, int w, int h, int shift);
 void k_blit_clear(void *dst, int dmod, int w, int h);
+void k_flush_cache(void);               /* after writing code */
 u16 k_rgb(const u8 *c);                  /* 6 bit RGB triplet -> 0x0RGB */
 void k_fade_pal(const u8 *a, const u8 *b, u16 *out, int n, int level); /* 0..64 */
 int k_mus_sync(void);                    /* dis_sync() */
