@@ -12,6 +12,10 @@
  *  4. the troll picture slides in, shakes and flashes.
  */
 #include "kernel.h"
+
+/* flashes and phase starts on row 7 of each group of 8, as the original
+ * (one row before the drums on row 0) */
+#define BEATROW 7
 #include "../../common/xorfill.h"
 #include "techno_data.h"
 
@@ -38,7 +42,7 @@ static int steps70(void)
 
 static void mus_wait_beat(void)
 {
-    while (!k_exit() && (k_mus_row & 7) != 7)
+    while (!k_exit() && (k_mus_row & 7) != BEATROW)
         k_waitvbl();
 }
 
@@ -275,7 +279,7 @@ static void columns(void)
         if (b < 3) {
             simple_col[1] = rgb6(63, 63, 63);
             k_waitvbl();
-            while (!k_exit() && (k_mus_row & 7) == 7)
+            while (!k_exit() && (k_mus_row & 7) == BEATROW)
                 k_waitvbl();
         }
     }
@@ -377,7 +381,7 @@ static void beat_flash(int n)
 {
     if (k_mus_row != lastrow) {
         lastrow = k_mus_row;
-        if ((lastrow & 7) == 7) curpal = 15;
+        if ((lastrow & 7) == BEATROW) curpal = 15;
     }
     while (n-- > 0 && curpal > 0)
         curpal--;
