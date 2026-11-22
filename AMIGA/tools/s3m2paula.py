@@ -761,53 +761,6 @@ def render_stream(path, alloc, table, bank, mixmask=0, rate=44100):
     w.writeframes(pcm.tobytes()); w.close()
 
 
-def render_wav(path, alloc, table, bank, rate=44100, seconds=None):
-    """Debug: render what Paula would play to a stereo WAV."""
-    import wave
-    smps = {k: np.frombuffer(bytes(bank[t['off']:t['off'] + t['len']]), dtype=np.int8).astype(np.float32)
-            for k, t in table.items()}
-    chpos = [0.0] * 4
-    chsmp = [None] * 4
-    outL, outR = [], []
-    for mk, res, tempo in alloc:
-        n = int(round(rate / (tempo * 2 / 5.0)))
-        bufL = np.zeros(n, np.float32); bufR = np.zeros(n, np.float32)
-        for p in range(4):
-            st = res[p]
-            if st is None:
-                chsmp[p] = None
-                continue
-            smp, pos, hz, vol, trig, virt = st
-            t = table[smp]
-            if trig is not None or chsmp[p] != smp:
-                chpos[p] = int(trig * t['r']) & ~1 if trig is not None else pos * t['r']
-                chsmp[p] = smp
-            a = smps[smp]
-            step = hz * t['r'] / rate
-            idxs = chpos[p] + step * np.arange(n)
-            if t['ll']:
-                lb, ll = t['lb'], t['ll']
-                idxs = np.where(idxs >= lb + ll, lb + (idxs - lb) % ll, idxs)
-                valid = np.ones(n, bool)
-            else:
-                valid = idxs < len(a)
-            ii = np.clip(idxs.astype(np.int64), 0, len(a) - 1)
-            sig = np.where(valid, a[ii], 0) * vol / 64.0 / t.get('g', 1.0)
-            if p in (0, 3): bufL += sig
-            else: bufR += sig
-            chpos[p] = chpos[p] + step * n
-            if t['ll'] and chpos[p] >= t['lb'] + t['ll']:
-                chpos[p] = t['lb'] + (chpos[p] - t['lb']) % t['ll']
-        outL.append(bufL); outR.append(bufR)
-        if seconds and sum(len(b) for b in outL) > seconds * rate:
-            break
-    L = np.concatenate(outL); R = np.concatenate(outR)
-    st = np.stack([L, R], 1) / 256.0
-    pcm = np.clip(st * 32767, -32768, 32767).astype('<i2')
-    w = wave.open(path, 'wb'); w.setnchannels(2); w.setsampwidth(2); w.setframerate(rate)
-    w.writeframes(pcm.tobytes()); w.close()
-
-
 def alias_inverted(mod, verbose=True):
     """The S3Ms carry phase-inverted copies of some samples for their Dolby
     Surround effect.  Paula has no surround: play the original instead (one
