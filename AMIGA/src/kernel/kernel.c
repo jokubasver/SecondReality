@@ -122,10 +122,13 @@ void k_level6(void)
 /* ---------------------------------------------------------------- timing */
 static u32 last_wait;
 
+static void trim_check(void);
+
 int k_waitvbl(void)
 {
     u32 f = k_frames;
     int d;
+    trim_check();
     while (k_frames == f)
         ;
     d = k_frames - last_wait;
@@ -301,9 +304,30 @@ void *k_alloc_tag(u32 size, int tag)
     blk[i].end = p + size;
     blk[i].tag = tag;
     nblk++;
+#ifdef MEMSTAT
+    {
+        /* lowest total free memory and largest free block, per part */
+        extern u32 k_memstat[32];
+        extern int k_memstat_part;
+        u32 pos = FREE_START, tot = 0, big = k_mem_free_largest();
+        int q;
+        for (q = 0; q <= nblk; q++) {
+            u32 lim = q < nblk ? blk[q].start : CHIP_END;
+            if (lim > pos) tot += lim - pos;
+            if (q < nblk && blk[q].end > pos) pos = (blk[q].end + 7) & ~7u;
+        }
+        q = k_memstat_part & 31;
+        if ((tot >> 4) < (k_memstat[q] & 0xffff)) k_memstat[q] = (k_memstat[q] & 0xffff0000) | (tot >> 4);
+        if ((big >> 4) < (k_memstat[q] >> 16)) k_memstat[q] = (k_memstat[q] & 0xffff) | ((big >> 4) << 16);
+    }
+#endif
     memset((void *)p, 0, size);
     return (void *)p;
 }
+#ifdef MEMSTAT
+u32 k_memstat[32];
+int k_memstat_part;
+#endif
 
 void *k_alloc(u32 size) { return k_alloc_tag(size, MEM_PART); }
 
@@ -509,6 +533,15 @@ struct part_hdr {
 
 void k_run_part(int id)
 {
+#ifdef MEMSTAT
+    {
+        extern u32 k_memstat[32];
+        extern int k_memstat_part;
+        static int n;
+        if (!n) { int q; for (q = 0; q < 32; q++) k_memstat[q] = 0xffffffff; }
+        k_memstat_part = n++;
+    }
+#endif
     u8 *f;
     struct part_hdr *h;
     u8 *img;
@@ -575,6 +608,38 @@ void k_music_load_bank(int slot, int file_id)
     music_bank[slot] = k_load_ex(file_id, 0, MEM_KEEP);
 }
 
+/* Once the song reaches 'order', the bank in 'slot' needs only its first
+ * 'bytes' (the converter puts the samples used late first): the rest of
+ * its memory is given back (checked from k_waitvbl, i.e. not in an
+ * interrupt). */
+static int trim_slot = -1, trim_order;
+static u32 trim_bytes;
+
+void k_music_trim_at(int slot, int order, u32 bytes)
+{
+    trim_slot = slot;
+    trim_order = order;
+    trim_bytes = bytes;
+}
+
+static void trim_check(void)
+{
+    int i;
+    void *p;
+    if (trim_slot < 0 || k_mus_order < trim_order)
+        return;
+    p = music_bank[trim_slot];
+    trim_slot = -1;
+    if (!p)
+        return;
+    for (i = 0; i < nblk; i++)
+        if (blk[i].start == (u32)p && blk[i].end > (u32)p + trim_bytes) {
+            blk[i].end = ((u32)p + trim_bytes + 7) & ~7u;
+            preload_kick();
+            break;
+        }
+}
+
 void k_music_free_bank(int slot)
 {
     PHASE(0x71000000 | slot);
@@ -611,6 +676,10 @@ void kmain(void)
     COPJMP1 = 0;
     DMACON = DMAF_SETCLR | DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | DMAF_RASTER;
     k_check_chip();
+    /* audio low-pass ("LED") filter off: the power LED dims, the music
+     * keeps its treble */
+    CIAA_DDRA |= 0x02;
+    CIAA_PRA |= 0x02;
     k_loader_init();
     k_music_init();
     {

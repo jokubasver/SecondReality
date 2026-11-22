@@ -1,9 +1,10 @@
 """Demo file manifest: the order here defines file ids (F_<name>) and disk layout."""
 
 # (output name, module, start orders [a-b = stop at b], sample budget bytes)
+# name, module, stream start orders, sample budget, extra converter options
 MUSIC = [
-    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000),
-    ('mus1', '../MAIN/MUSIC1.S3M', '0', 240000),
+    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000, []),
+    ('mus1', '../MAIN/MUSIC1.S3M', '0', 320000, ['--prio', 'tools/mus1_prio.json', '--trim-order', '92']),
 ]
 
 # part directories under src/parts

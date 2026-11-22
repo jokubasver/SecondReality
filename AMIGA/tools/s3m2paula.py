@@ -19,6 +19,7 @@ from s3m import S3M
 PAULA_CLOCK = 3546895          # PAL
 CIA_CLOCK = 709379             # PAL E-clock
 MIN_PERIOD = 124
+GAIN_MAX = 2.0
 NT = [1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960, 907]
 SINE = [0, 24, 49, 74, 97, 120, 141, 161, 180, 197, 212, 224, 235, 244, 250, 253,
         255, 253, 250, 244, 235, 224, 212, 197, 180, 161, 141, 120, 97, 74, 49, 24]
@@ -343,7 +344,12 @@ def build_samples(mod, sims, budget, verbose=True):
     """Choose per-sample rate factors to fit 'budget' bytes and build the bank."""
     used = {}
     maxpos = {}
+    vols = {}
     for emu, ticks in sims:
+        for mk, voices, tempo in ticks:
+            for st in voices:
+                if st is not None and st[3] > 0:
+                    vols.setdefault(st[0], []).append(st[3])
         for k, f in emu.freqs.items():
             used.setdefault(k, []).extend(f)
         for k, p in emu.max_pos.items():
@@ -385,7 +391,17 @@ def build_samples(mod, sims, budget, verbose=True):
         if verbose: print('  bandwidth Q = %.0f Hz' % lo)
     bank = bytearray(4)     # 4 zero bytes at the start = silence for Paula
     table = {}
-    for k, d in sorted(info.items()):
+    # samples heard until late in the song first, so the bank can be cut
+    # short once the others are no longer needed (see write_bank)
+    lastuse = {}
+    for emu, ticks in sims:
+        o = 0
+        for mk, voices, tempo in ticks:
+            if mk: o = mk[0]
+            for st in voices:
+                if st is not None and st[3] > 0:
+                    lastuse[st[0]] = max(lastuse.get(st[0], 0), o)
+    for k, d in sorted(info.items(), key=lambda kd: (-lastuse.get(kd[0], 0), kd[0])):
         s = d['s']
         r = rs[k]
         x = np.frombuffer(s.pcm[:d['len']], dtype=np.int8).astype(np.float64)
@@ -402,16 +418,21 @@ def build_samples(mod, sims, budget, verbose=True):
             y = sinc_resample(x, r)
             if len(y) & 1: y = np.concatenate([y, [0]])
             newlb = newll = 0
-        y = np.clip(np.round(y), -128, 127).astype(np.int8)
+        # normalise towards full scale (less quantisation noise), Paula
+        # volume compensates; limited so that typical volumes stay >= 16
+        peak = max(1.0, float(np.max(np.abs(y))) if len(y) else 1.0)
+        medvol = float(np.median(vols.get(k, [64])))
+        g = max(1.0, min(127.0 / peak, GAIN_MAX, medvol / 16.0))
+        y = np.clip(np.round(y * g), -128, 127).astype(np.int8)
         if len(y) < 2:
             y = np.zeros(2, dtype=np.int8)
         off = len(bank)
         bank += y.tobytes()
         if len(bank) & 1: bank += b'\0'
-        table[k] = dict(off=off, len=len(y), lb=newlb, ll=newll, r=r)
+        table[k] = dict(off=off, len=len(y), lb=newlb, ll=newll, r=r, g=g, last=lastuse.get(k, 0))
         if verbose:
-            print('  smp %2d %-28s %6d -> %6d  r=%.3f fmax=%.0f%s' % (
-                k, s.name[:28], len(s.pcm), len(y), r, d['fmax'], ' loop' if s.loop else ''))
+            print('  smp %2d %-28s %6d -> %6d  r=%.3f g=%.2f fmax=%.0f%s' % (
+                k, s.name[:28], len(s.pcm), len(y), r, g, d['fmax'], ' loop' if s.loop else ''))
     return bank, table
 
 
@@ -533,6 +554,7 @@ def encode_stream(alloc, table):
                         cf |= 4
                         cb += struct.pack('>H', per)
                     s['per'] = per
+                vol = min(64, int(round(vol / t.get('g', 1.0))))
                 if vol != s['vol']:
                     cf |= 8
                     cb += bytes([vol])
@@ -608,6 +630,17 @@ def write_bank(path, bank, table):
     return len(hdr) + len(bank)
 
 
+def trim_size(table, order):
+    """bank file bytes still needed once the song is at 'order' or later"""
+    hdr = 2 + 10 * len(table)
+    hdr += -hdr & 3
+    end = 4
+    for k, t in table.items():
+        if t['last'] >= order:
+            end = max(end, t['off'] + t['len'])
+    return hdr + ((end + 1) & ~1)
+
+
 def render_wav(path, alloc, table, bank, rate=44100, seconds=None):
     """Debug: render what Paula would play to a stereo WAV."""
     import wave
@@ -639,7 +672,7 @@ def render_wav(path, alloc, table, bank, rate=44100, seconds=None):
             else:
                 valid = idxs < len(a)
             ii = np.clip(idxs.astype(np.int64), 0, len(a) - 1)
-            sig = np.where(valid, a[ii], 0) * vol / 64.0
+            sig = np.where(valid, a[ii], 0) * vol / 64.0 / t.get('g', 1.0)
             if p in (0, 3): bufL += sig
             else: bufR += sig
             chpos[p] = chpos[p] + step * n
@@ -655,6 +688,47 @@ def render_wav(path, alloc, table, bank, rate=44100, seconds=None):
     w.writeframes(pcm.tobytes()); w.close()
 
 
+def alias_inverted(mod, verbose=True):
+    """The S3Ms carry phase-inverted copies of some samples for their Dolby
+    Surround effect.  Paula has no surround: play the original instead (one
+    copy in memory, and the allocator sees them as the same sound)."""
+    import numpy as np
+    alias = {}
+    smp = mod.samples
+    for b in range(len(smp)):
+        if not smp[b].pcm:
+            continue
+        y = np.frombuffer(smp[b].pcm, dtype=np.int8).astype(np.int32)
+        for a in range(b):
+            A, B = smp[a], smp[b]
+            if a + 1 in alias or not A.pcm or len(A.pcm) != len(B.pcm) or A.c2spd != B.c2spd or \
+                    A.loop != B.loop or (A.loop and (A.loopbeg, A.loopend) != (B.loopbeg, B.loopend)):
+                continue
+            x = np.frombuffer(A.pcm, dtype=np.int8).astype(np.int32)
+            if np.all((x + y == 0) | (x + y == -1)):
+                alias[b + 1] = a + 1
+                break
+    for pat in mod.patterns:
+        for row in pat:
+            for ch, c in enumerate(row):
+                if c and c[1] in alias:
+                    row[ch] = (c[0], alias[c[1]], c[2], c[3], c[4])
+    if verbose and alias:
+        print('  inverted copies played as originals:', ', '.join('%d->%d' % kv for kv in sorted(alias.items())))
+    return alias
+
+
+def channel_map(mod):
+    """virtual voice index -> S3M channel; left voices even, right odd"""
+    order = [i for i, c in enumerate(mod.chset) if c < 16]
+    lefts = [ch for ch in order if mod.chset[ch] < 8]
+    rights = [ch for ch in order if 8 <= mod.chset[ch] < 16]
+    chmap = [None] * 8
+    for i, ch in enumerate(lefts[:4]): chmap[i * 2] = ch
+    for i, ch in enumerate(rights[:4]): chmap[i * 2 + 1] = ch
+    return chmap
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('s3m')
@@ -662,20 +736,13 @@ def main():
     ap.add_argument('--orders', default='0')
     ap.add_argument('--budget', type=int, default=240000)
     ap.add_argument('--wav', action='store_true')
+    ap.add_argument('--prio', help='note priorities from a reference arrangement (expert_prio.py)')
+    ap.add_argument('--old-alloc', action='store_true')
+    ap.add_argument('--trim-order', type=int, help='write <out>.trim: bank size needed from this order on')
     a = ap.parse_args()
     mod = S3M(a.s3m)
-    # map S3M channel numbers to emulator voice indices
-    chmap = [None] * 8
-    order = [i for i, c in enumerate(mod.chset) if c < 16]
-    for vi, ch in enumerate(order[:8]):
-        side = 0 if mod.chset[ch] < 8 else 1
-        chmap[vi] = ch
-    # ensure voice index parity follows the side: left = even, right = odd
-    lefts = [ch for ch in order if mod.chset[ch] < 8]
-    rights = [ch for ch in order if 8 <= mod.chset[ch] < 16]
-    chmap = [None] * 8
-    for i, ch in enumerate(lefts[:4]): chmap[i * 2] = ch
-    for i, ch in enumerate(rights[:4]): chmap[i * 2 + 1] = ch
+    alias_inverted(mod)
+    chmap = channel_map(mod)
     starts = []
     stops = []
     for x in a.orders.split(','):
@@ -692,8 +759,17 @@ def main():
     bank, table = build_samples(mod, sims, a.budget)
     size = write_bank(a.out + '.smp', bank, table)
     print('sample bank %d bytes' % size)
+    if a.trim_order is not None:
+        ts = trim_size(table, a.trim_order)
+        open(a.out + '.trim', 'w').write('%d %d\n' % (a.trim_order, ts))
+        print('from order %d the bank needs %d bytes' % (a.trim_order, ts))
     for so, (emu, ticks) in zip(starts, sims):
-        al = allocate(mod, ticks, table, chmap)
+        if a.old_alloc:
+            al = allocate(mod, ticks, table, chmap)
+        else:
+            import paula_alloc
+            al = paula_alloc.allocate(mod, ticks, table, chmap,
+                                      paula_alloc.load_prio(a.prio) if a.prio else None)
         recs = encode_stream(al, table)
         st = write_chunked('%s_%d.str' % (a.out, so), recs)
         print('stream from order %d: %d bytes raw, %d chunked+packed' % (so, sum(map(len, recs)), st))

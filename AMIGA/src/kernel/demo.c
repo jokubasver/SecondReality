@@ -4,6 +4,7 @@
  */
 #include "kernel_int.h"
 #include "files.h"
+#include "music_trim.h"
 
 void k_run_part(int id);
 void k_preload(int id);
@@ -69,6 +70,12 @@ void demo_main(void)
     /* ---- music 1 */
     k_music_load_bank(1, F_MUS1_BANK);
     k_music_play(1, F_MUS1_S0);
+#ifdef MUS1_TRIM_ORDER
+    {
+        void k_music_trim_at(int slot, int order, u32 bytes);
+        k_music_trim_at(1, MUS1_TRIM_ORDER, MUS1_TRIM_BYTES);
+    }
+#endif
     k_music_free_bank(0);
     k_preload_after(F_PART_TUNNELI);
     k_run_part(F_PART_GLENZ);
@@ -129,6 +136,19 @@ void demo_main(void)
     k_run_part(F_PART_CRED);
     solid(0);
     k_run_part(F_PART_ENDSCRL);
+#ifdef MEMSTAT
+    {
+        extern u32 k_memstat[32];
+        extern void k_panic(u32 vec, u32 *regs, u16 *frame);
+        static u16 fr[80];
+        int q;
+        for (q = 0; q < 16; q++) {
+            fr[q * 2 + 7] = k_memstat[16 + q] >> 16;
+            fr[q * 2 + 8] = k_memstat[16 + q];
+        }
+        k_panic(0xab, k_memstat, fr);
+    }
+#endif
     {
         extern void *k_whd_resload;
         void k_whd_quit(void);

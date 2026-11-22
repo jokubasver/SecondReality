@@ -63,13 +63,32 @@ Release files are in `dist/`.
 
 ## Music
 
-The 8 channel S3M modules are played by a converter: the songs are
-emulated (ST3 semantics) and written as a stream of Paula register
-writes, the loudest voice of each stereo side gets the channels, samples
-are resampled to fit the memory budget.  The DIS music sync calls
+The 8 channel S3M modules are played by a converter
+(`tools/s3m2paula.py`): the songs are emulated (ST3 semantics) and written
+as a stream of Paula register writes; the DIS music sync calls
 (`dis_musplus`, `dis_sync`, frame counters) are kept.
 
-## The parts
+- Voices to channels (`tools/paula_alloc.py`): whole notes are assigned
+  to the 4 channels with lookahead; a note keeps its channel until it ends
+  or fades, echo/doubling voices count less, a voice prefers its own
+  stereo side.
+- MUSIC1 uses note priorities taken from Estrayk's (unfinished) 4 channel
+  Protracker arrangement, "second reality 6.mod" (modland.com,
+  pub/modules/Protracker/Estrayk): `tools/expert_prio.py` aligns it with
+  the S3M and records which notes it keeps (`tools/mus1_prio.json`); the
+  rest of the song uses keep rates per channel and sample learnt from it.
+- Phase-inverted sample copies (the S3Ms' Dolby Surround trick) are played
+  as the original sample.
+- Samples are resampled to fit the budget (MUSIC0 200 KB, MUSIC1 320 KB)
+  and normalised, with Paula volume compensating.  The MUSIC1 bank keeps
+  the samples heard until late in the song first and is cut to 128 KB at
+  order 92, which makes room for the last parts.
+- The audio filter ("LED") is switched off.
+
+`tools/musdiff.py` renders the original 8 voice mix and the conversion and
+reports where they differ (`--wav` writes both).
+
+## The parts## The parts
 
 Everything is timed by the music like the original; effects that ran at
 70 frames per second on VGA are scaled to the Amiga's 50.
