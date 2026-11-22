@@ -18,11 +18,14 @@
 #define PIC_LINE 0x61                /* PAL line of the picture top */
 #define INTRO_LINE 0x48              /* PAL line of 200 line area top */
 
-static u8 *textplane;
+static u8 *textplane;                /* the one shown */
+static u8 *tplane[2];                /* double buffered: drawn, then shown
+                                      * together with its scroll position */
 static u32 *cop;
 static u16 colors[32];
 static volatile int ncolors;
 static volatile int vb_sx;           /* scroll position 0..320 */
+static volatile int vb_state = -1;   /* scroll | text buffer << 16, -1: vb_sx only */
 static volatile int mode;            /* 0 intro, 1 picture */
 
 static const u8 black[96 * 3];
@@ -35,7 +38,12 @@ static void vbl(void)
     if (mode == 1) {
         /* X = first visible pixel in the buffer (16 pixel pad on the left);
          * the fetch starts one word early (DDFSTRT 0x30) */
-        int X = vb_sx + 16;
+        int st = vb_state, X;
+        if (st >= 0) {
+            vb_sx = st & 0xffff;
+            textplane = tplane[st >> 16];
+        }
+        X = vb_sx + 16;
         int pw = ((X + 15) >> 4) - 1, d = 16 * pw + 16 - X;
         u32 off = pw * 2;
         BPLPT(0) = (u32)pic_plane0 + off;
@@ -153,25 +161,35 @@ static const int cred_y[4] = { CRED0_Y, CRED1_Y, CRED2_Y, CRED3_Y };
 static const int cred_h[4] = { CRED0_H, CRED1_H, CRED2_H, CRED3_H };
 static int cur_text = -1, drawn_sx = -1;
 
-/* keep the credit text static on screen while the picture scrolls */
-static void draw_text(int sx)
+/* keep the credit text static on screen while the picture scrolls: the
+ * text is drawn into the hidden buffer at the new scroll position, then
+ * the VBL shows both at once */
+static int back = 1, drawn[2] = { -1, -1 };
+
+static void show_scroll(int sx)
 {
     int x = sx + 16, y, h;
-    if (cur_text < 0 || sx == drawn_sx)
-        return;
-    y = cred_y[cur_text];
-    h = cred_h[cur_text];
-    k_blit_clear(textplane + y * BPR, 0, BPR / 2, h);
-    k_blit_copy(cred[cur_text], -2, textplane + y * BPR + (x >> 4) * 2,
-                BPR - 42, 21, h, x & 15);
-    drawn_sx = sx;
+    if (cur_text >= 0 && drawn[back] != sx) {
+        u8 *tp = tplane[back];
+        y = cred_y[cur_text];
+        h = cred_h[cur_text];
+        k_blit_clear(tp + y * BPR, 0, BPR / 2, h);
+        k_blit_copy(cred[cur_text], -2, tp + y * BPR + (x >> 4) * 2,
+                    BPR - 42, 21, h, x & 15);
+        k_wait_blitter();
+        drawn[back] = sx;
+    }
+    vb_state = sx | (back << 16);
+    back ^= 1;
 }
 
 static void set_text(int n)
 {
-    k_blit_clear(textplane, 0, BPR / 2, PIC_H);
+    k_blit_clear(tplane[0], 0, BPR / 2, PIC_H);
+    k_blit_clear(tplane[1], 0, BPR / 2, PIC_H);
+    k_wait_blitter();
     cur_text = n;
-    drawn_sx = -1;
+    drawn[0] = drawn[1] = -1;
 }
 
 void part_main(void)
@@ -179,7 +197,9 @@ void part_main(void)
     int a, t, step, f, tptr;
     (void)pictmp;
     cop = k_alloc(128 * 4);
-    textplane = k_alloc(BPR * PIC_H + BPR);
+    tplane[0] = k_alloc(BPR * PIC_H + BPR);
+    tplane[1] = k_alloc(BPR * PIC_H + BPR);
+    textplane = tplane[0];
     ncolors = 0;
     mode = 0;
     intro_fade(0);
@@ -246,8 +266,7 @@ void part_main(void)
                 if (txt > 64) txt = 64;
                 if (l >= 64) fade_dir = 0;
             }
-            vb_sx = a;
-            draw_text(a);
+            show_scroll(a);
             pic_colors(64, txt);
             k_waitvbl();
         }
