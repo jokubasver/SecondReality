@@ -15,11 +15,12 @@
 	.text
 	.globl	v3_xform_idx
 
-| d = d >> 14 (d holds a sum of 16x16 products), 20 cycles
+| d = d >> 14 (d holds a sum of 16x16 products), keeping all 32 bits:
+| big objects (U2A's mother ship) reach z > 32767, which wrapped around
+| when only the low word was kept
 .macro	SHR14 r
-	asl.l	#2,\r
-	swap	\r
-	ext.l	\r
+	asr.l	#8,\r
+	asr.l	#6,\r
 .endm
 
 v3_xform_idx:

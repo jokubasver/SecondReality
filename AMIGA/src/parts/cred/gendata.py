@@ -13,7 +13,19 @@ names = ['01', '02', '03', '04', '05', '05B', '06', '07', '08', '09', '10', '10B
 H = gfxconv.Header('cred_data.h')
 pics, pals = [], []
 for n in names:
-    w, h, rows, pal = lbm.read(os.path.join(SRC, 'PICS/PIC%s.LBM' % n))
+    if n == '02':
+        # PIC02.LBM in the sources is a placeholder ("PARTPIC MISSING");
+        # pic02.png is the picture of the released demo (its 160x100
+        # pixels as the credits screen shows them)
+        im = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pic02.png'))
+        im = im.convert('RGB').quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+        w, h = im.size
+        d = list(im.getdata())
+        rows = [d[y * w:(y + 1) * w] for y in range(h)]
+        pp = im.getpalette()[:768]
+        pal = [tuple(pp[i:i + 3]) for i in range(0, len(pp), 3)]
+    else:
+        w, h, rows, pal = lbm.read(os.path.join(SRC, 'PICS/PIC%s.LBM' % n))
     pal = [tuple(c) for c in pal] + [(0, 0, 0)] * (256 - len(pal))
     pal6 = [tuple(v >> 2 for v in c) for c in pal]
     idx, q = gfxconv.picture(rows, pal6, 160, 100, 16)

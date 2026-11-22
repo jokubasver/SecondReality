@@ -1,10 +1,11 @@
 /*
  * JPLOGO - the picture slides in, then bounces like jelly (JPLOGO/JP.C).
  *
- * Amiga version: the picture is stored at 7 widths (the bulge of the
- * squashed picture); per display line the copper sets the bitplane
- * modulos, which jump to any row of any width.  So the vertical squash
- * and the horizontal bulge cost 200 modulo values per frame.
+ * Amiga version: for the bounce the picture is stored at 13 widths, 8
+ * pixels apart (100 rows each), at rest at its own width with all 200
+ * rows; per display line the copper sets the bitplane modulos, which jump
+ * to any row of any width.  So the vertical squash and the horizontal
+ * bulge cost 200 modulo values per frame.
  */
 #include "kernel.h"
 #include "jplogo_data.h"
@@ -17,9 +18,20 @@ static u32 *ptrs[2];
 static u16 *mods[2];
 static s16 framey1[201], framey2[201];
 
-static const u8 *rowptr(int g, int v)       /* g: picture row, -1/200 empty */
+#define FULL 255                /* version: the 184 pixel picture, 200 rows */
+
+/* g: picture row (0..199, -1/200 = empty), v: width version or FULL */
+static const u8 *rowptr(int g, int v)
 {
-    return jpic + (g + 1) * GROUP + v * 32;
+    /* empty rows: a zero group next to the table in use (the modulo is
+     * 16 bit: a line can only jump +-32 KB to the next) */
+    if (g < 0)
+        return jpic;
+    if (g >= 200)
+        return jpic + (v == FULL ? EGROUP : BEGROUP) * GROUP;
+    if (v == FULL)
+        return jpic + (FGROUP0 + g / NV) * GROUP + (g % NV) * 32;
+    return jpic + (1 + g * BROWS / 200) * GROUP + v * 32;
 }
 
 /* build frame data: rows[L] = row, vers[L] = width version (row -1 = empty) */
@@ -134,7 +146,7 @@ void part_main(void)
             for (l = 0; l < 200; l++) {
                 int r = l + y / 128;
                 rows[l] = r < 200 ? r : 200;
-                vers[l] = 3;
+                vers[l] = FULL;
             }
             make(b, rows, vers);
             k_set_copper(cop[b]);
@@ -165,11 +177,11 @@ void part_main(void)
             } else {
                 int bq = (s32)(y - y1) * 400 / (y2 - y1);
                 int a = 184 + (jsin[(bq * 32 / 25) & 1023] * xsc + 32) / 64;
-                int v = (a - 136 + 8) / 16;
+                int v = (a - 136 + 4) >> 3;
                 if (v < 0) v = 0;
                 if (v > NV - 1) v = NV - 1;
                 rows[l] = bq >> 1;
-                vers[l] = v;
+                vers[l] = xsc || y1 ? v : FULL;   /* at rest: full resolution */
             }
         }
         make(b, rows, vers);

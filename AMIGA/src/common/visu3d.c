@@ -176,7 +176,7 @@ static struct v3screen *S;
 static struct xf xf;
 static u16 vstamp[V3_MAXV], stamp = 1;
 static u16 vlist[V3_MAXV];
-static s16 cx, cy, cz;          /* camera position in object space (>>4) */
+static s32 cx, cy, cz;          /* camera position in object space */
 
 /* per object setup: transform matrix, light and camera in object space */
 static void setup_object(void)
@@ -204,13 +204,6 @@ static void setup_object(void)
         s32 x = -(mul32x16(W.x, W.m[0]) + mul32x16(W.y, W.m[3]) + mul32x16(W.z, W.m[6]));
         s32 y = -(mul32x16(W.x, W.m[1]) + mul32x16(W.y, W.m[4]) + mul32x16(W.z, W.m[7]));
         s32 z = -(mul32x16(W.x, W.m[2]) + mul32x16(W.y, W.m[5]) + mul32x16(W.z, W.m[8]));
-        x >>= 4; y >>= 4; z >>= 4;
-        if (x > 32767) x = 32767;
-        if (x < -32767) x = -32767;
-        if (y > 32767) y = 32767;
-        if (y < -32767) y = -32767;
-        if (z > 32767) z = 32767;
-        if (z < -32767) z = -32767;
         cx = x; cy = y; cz = z;
     }
 }
@@ -475,8 +468,19 @@ static inline int facing(const struct v3obj *o, const u16 *pd)
         return 1;
     nn = o->n + pd[2] * 3;
     v = o->v + pd[3] * 3;
-    d = mul16(nn[0], (v[0] >> 4) - cx) + mul16(nn[1], (v[1] >> 4) - cy) + mul16(nn[2], (v[2] >> 4) - cz);
+    /* full precision: big objects seen nearly edge on (U2A's mother
+     * ship) need it, 1/16 units flipped the sign */
+    d = mul32x16(v[0] - cx, nn[0]) + mul32x16(v[1] - cy, nn[1]) + mul32x16(v[2] - cz, nn[2]);
+#ifdef V3_DEBUG_FACING
+    V3_DEBUG_FACING(o, pd, d);
+#endif
     return d < 0;
+}
+
+/* d * t / 256 for 0 <= t <= 256 and |d| < 2^30 */
+static inline s32 lerp256(s32 d, s32 t)
+{
+    return (d >> 8) * t + (((d & 255) * t) >> 8);
 }
 
 static void draw_poly(struct v3scene *s, const struct v3obj *o, const u16 *pd)
@@ -510,8 +514,10 @@ static void draw_poly(struct v3scene *s, const struct v3obj *o, const u16 *pd)
                 s32 t = sdiv((ZMIN - a->z) << 8, dz < 0 ? -dz : dz);
                 s32 x, y;
                 if (dz < 0) t = -t;
-                x = a->x + (((b->x - a->x) >> 4) * t >> 4);
-                y = a->y + (((b->y - a->y) >> 4) * t >> 4);
+                /* dx * t / 256 without overflow: big objects close to the
+                 * camera (U2A's mother ship) have dx in the 10^7 range */
+                x = a->x + lerp256(b->x - a->x, t);
+                y = a->y + lerp256(b->y - a->y, t);
                 /* x, y already scaled; ZMIN is a power of two.  Clamp
                  * like the projection does: big walls and floors close
                  * to the camera (U2E's city) would wrap around */
@@ -524,6 +530,9 @@ static void draw_poly(struct v3scene *s, const struct v3obj *o, const u16 *pd)
         }
         if (n < 3)
             return;
+#ifdef V3_DEBUG_CLIP
+        V3_DEBUG_CLIP(o, pd, n, xs, ys);
+#endif
     }
     {
         int col = (pd[1] + shade_of((flags & 0x10) ? (flags | 0x0c) : flags, nn)) & 0xff;

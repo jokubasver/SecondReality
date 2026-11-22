@@ -1,7 +1,7 @@
 #include "kernel.h"
 struct vout { s32 x, y, z; s16 sx, sy; };
 struct xf { s16 m[9]; s16 pad; s32 tx, ty, tz, mulx, muly, addx, addy, zmin; };
-static s32 shr14(s32 d) { return (s16)((d << 2) >> 16); }
+static s32 shr14(s32 d) { return d >> 14; }
 static s16 proj(s32 a, s32 z, s32 add)
 {
     s32 q;

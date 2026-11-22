@@ -106,7 +106,7 @@ def build_part(name, defs):
     gen = os.path.join(d, 'gendata.py')
     if os.path.exists(gen):
         stamp = os.path.join(B, 'gen', name + '.stamp')
-        deps = [gen] + glob.glob(os.path.join(ROOT, 'tools/*.py'))
+        deps = [gen] + glob.glob(os.path.join(ROOT, 'tools/*.py')) + glob.glob(os.path.join(d, '*.png'))
         if newer(stamp, deps):
             run([sys.executable, gen, os.path.join(B, 'gen')], cwd=d)
             open(stamp, 'w').write('ok')

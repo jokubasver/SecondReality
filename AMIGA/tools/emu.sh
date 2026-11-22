@@ -13,7 +13,7 @@ DISPLAY=$D fs-uae --amiga_model=A500 --chip_memory=${CHIP_MEM:-1024} --slow_memo
 T0=0
 for t in "$@"; do
   case $t in k*) k=${t#k}; DISPLAY=$D xdotool search --class fs-uae windowactivate --sync key --delay 200 "$k" 2>/dev/null || DISPLAY=$D xdotool key "$k"; continue;; esac
-  sleep $((t - T0)); T0=$t
+  sleep $(python3 -c "print(max(0, $t - $T0))"); T0=$t
   DISPLAY=$D import -window root "${OUT}_$t.png" || echo "screenshot failed at $t"
 done
 kill $FP 2>/dev/null; sleep 0.5; kill $XP 2>/dev/null
