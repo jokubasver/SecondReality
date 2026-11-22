@@ -20,6 +20,7 @@ PAULA_CLOCK = 3546895          # PAL
 CIA_CLOCK = 709379             # PAL E-clock
 MIN_PERIOD = 124
 GAIN_MAX = 2.0
+MIX_PERIOD = 428                # mixer channels: 8287 Hz
 NT = [1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960, 907]
 SINE = [0, 24, 49, 74, 97, 120, 141, 161, 180, 197, 212, 224, 235, 244, 250, 253,
         255, 253, 250, 244, 235, 224, 212, 197, 180, 161, 141, 120, 97, 74, 49, 24]
@@ -497,33 +498,45 @@ def allocate(mod, ticks, table, chmap):
 
 
 # ---------------------------------------------------------------- stream
-def encode_stream(alloc, table):
+def encode_stream(alloc, table, mixmask=0):
     """Returns a list of tick records (bytes).  Record format:
-         u8 flags: bit0-3 channel N has data, bit4 row marker, bit5 tempo change
-                   0x40|n : n (1..63) ticks without any change (no further bytes)
-                   0x80   : end of stream
+         u8 ctl: 0x80 end of stream, 0x81 end of chunk, 0x40|n: n (1..63)
+                 ticks without any change; otherwise bit0 voice mask follows,
+                 bit4 row marker, bit5 tempo change
          [bit5] u16 CIA timer value
          [bit4] u8 order, u8 row, u8 plus
-         per channel with data: u8 cflags:
+         [bit0] u8 voice mask: bits 0-3 Paula channels played directly,
+                bits 4-7 voices mixed by the CPU (2 per mixer channel)
+         per voice in the mask: u8 cflags:
              bit0 trigger: u8 sample index, u16 offset in words
              bit1 period delta: s8      bit2 period absolute: u16
-             bit3 volume: u8            bit4 stop (silence the channel)
+             bit3 volume: u8            bit4 stop (silence the voice)
+       Volumes: 0..64 Paula volume without mixer channels; with them, both
+       direct and mixed voices use 0..32 (a mixer channel adds 2 voices).
     """
     recs = []
     idx = {k: i for i, k in enumerate(sorted(table))}
-    state = [dict(per=None, vol=None, on=False) for _ in range(4)]
+    state = [dict(per=None, vol=None, on=False) for _ in range(8)]
+    vdiv = 2.0 if mixmask else 1.0
+    if mixmask:
+        # the mixer plays its voices 1-2 blocks (15-31 ms) late: send their
+        # events one tick early
+        alloc = [(mk, list(res[:4]) + list((alloc[i + 1][1] if i + 1 < len(alloc) else [None] * 8)[4:]), tempo)
+                 for i, (mk, res, tempo) in enumerate(alloc)]
     cur_tempo = None
     for mk, res, tempo in alloc:
-        flags = 0
+        ctl = 0
         body = bytearray()
         if tempo != cur_tempo:
-            flags |= 0x20
+            ctl |= 0x20
             cur_tempo = tempo
             body += struct.pack('>H', int(round(CIA_CLOCK / (tempo * 2 / 5.0))))
         if mk is not None:
-            flags |= 0x10
+            ctl |= 0x10
             body += bytes([mk[0], mk[1], mk[2]])
-        for p in range(4):
+        mask = 0
+        vb = bytearray()
+        for p in range(len(res)):
             st = res[p]
             cf = 0
             cb = bytearray()
@@ -554,16 +567,18 @@ def encode_stream(alloc, table):
                         cf |= 4
                         cb += struct.pack('>H', per)
                     s['per'] = per
-                vol = min(64, int(round(vol / t.get('g', 1.0))))
+                vol = min(64, int(round(vol / t.get('g', 1.0) / vdiv)))
                 if vol != s['vol']:
                     cf |= 8
                     cb += bytes([vol])
                     s['vol'] = vol
             if cf:
-                flags |= 1 << p
-                body += bytes([cf]) + cb
-        recs.append(bytes([flags]) + body)
-    # run-length code empty ticks
+                mask |= 1 << p
+                vb += bytes([cf]) + cb
+        if mask:
+            ctl |= 1
+            body += bytes([mask]) + vb
+        recs.append(bytes([ctl]) + body)
     out = []
     i = 0
     while i < len(recs):
@@ -580,8 +595,9 @@ def encode_stream(alloc, table):
     return out
 
 
-def write_chunked(path, recs, chunk=1024):
-    """Container: 'SRST', u16 nchunks, u16 maxchunk, u32 offsets[n+1], packed chunks.
+def write_chunked(path, recs, chunk=1024, mixmask=0, mixper=MIX_PERIOD):
+    """Container: 'SRSM', u16 nchunks, u16 maxchunk, u16 mixer channel mask,
+    u16 mixer Paula period, u32 offsets[n+1] (from the file start), packed chunks.
     Every chunk ends with 0x81 (continue in next chunk) except the last (0x80)."""
     import subprocess, tempfile, os
     chunks = []
@@ -604,13 +620,13 @@ def write_chunked(path, recs, chunk=1024):
             p = open(fo, 'rb').read()
             if len(p) & 1: p += b'\0'
             packed.append(p)
-    hdr = len(b'SRST') + 4 + 4 * (len(chunks) + 1)
+    hdr = 4 + 8 + 4 * (len(chunks) + 1)
     offs = []
     o = hdr
     for p in packed:
         offs.append(o); o += len(p)
     offs.append(o)
-    data = b'SRST' + struct.pack('>HH', len(chunks), max(map(len, chunks))) + \
+    data = b'SRSM' + struct.pack('>HHHH', len(chunks), max(map(len, chunks)), mixmask, mixper) + \
         b''.join(struct.pack('>I', x) for x in offs) + b''.join(packed)
     open(path, 'wb').write(data)
     return len(data)
@@ -639,6 +655,110 @@ def trim_size(table, order):
         if t['last'] >= order:
             end = max(end, t['off'] + t['len'])
     return hdr + ((end + 1) & ~1)
+
+
+def render_stream(path, alloc, table, bank, mixmask=0, rate=44100):
+    """Renders what the Amiga plays for an allocation: direct voices as Paula
+    plays them, mixed voices exactly as the kernel mixer computes them
+    (8 bit, nearest sample, (s * q) >> 6 volume, 2 voices summed per
+    mixer channel at the mixer rate), to a stereo WAV."""
+    import wave
+    smps = {k: np.frombuffer(bytes(bank[t['off']:t['off'] + t['len']]), dtype=np.int8).astype(np.int64)
+            for k, t in table.items()}
+    vdiv = 2.0 if mixmask else 1.0
+    mixch = [c for c in range(4) if mixmask & (1 << c)]
+    side = {0: 0, 1: 1, 2: 1, 3: 0}
+    st = {}                                  # voice id -> dict(smp, pos16, per, vol)
+    out = [[], []]
+    macc = 0                                 # mixer samples, fraction (x 428)
+    hacc = 0.0
+    for mk, res, tempo in alloc:
+        cia = int(round(CIA_CLOCK / (tempo * 2 / 5.0)))
+        tick_s = cia / CIA_CLOCK
+        n = int(round(rate * tick_s + hacc)); hacc += rate * tick_s - n
+        macc += 5 * cia
+        nm = macc // MIX_PERIOD; macc -= nm * MIX_PERIOD
+        buf = [np.zeros(n), np.zeros(n)]
+        for vid in range(len(res)):
+            r = res[vid]
+            if r is None:
+                st.pop(vid, None)
+                continue
+            smp, pos, hz, vol, trig, virt = r
+            t = table[smp]
+            per = max(MIN_PERIOD, min(65535, int(round(PAULA_CLOCK / (hz * t['r']))))) if hz > 0 else 65535
+            v = min(64, int(round(vol / t.get('g', 1.0) / vdiv)))
+            s0 = st.get(vid)
+            if trig is not None:
+                offw = int(trig * t['r']) // 2
+                if offw * 2 >= t['len'] - 2:
+                    offw = t['lb'] // 2 if t['ll'] else None
+                if offw is not None:
+                    s0 = st[vid] = dict(smp=smp, pos=offw * 2 << 16)
+            if s0 is None or s0['smp'] != smp:
+                continue
+            s0['per'] = per
+            s0['vol'] = v
+        # direct voices
+        for vid, s0 in list(st.items()):
+            if vid >= 4:
+                continue
+            t = table[s0['smp']]; a = smps[s0['smp']]
+            step = PAULA_CLOCK / s0['per'] / rate
+            idx = s0['pos'] / 65536.0 + step * np.arange(n)
+            if t['ll']:
+                lb, ll = t['lb'], t['ll']
+                idx = np.where(idx >= lb + ll, lb + (idx - lb) % ll, idx)
+                ok = np.ones(n, bool)
+            else:
+                ok = idx < len(a)
+            ii = np.clip(idx.astype(np.int64), 0, len(a) - 1)
+            buf[side[vid]] += np.where(ok, a[ii], 0) * s0['vol'] / 64.0
+            np_ = s0['pos'] / 65536.0 + step * n
+            if t['ll'] and np_ >= t['lb'] + t['ll']:
+                np_ = t['lb'] + (np_ - t['lb']) % t['ll']
+            s0['pos'] = int(np_ * 65536)
+            if not t['ll'] and np_ >= len(a):
+                del st[vid]
+        # mixed voices
+        for k, c in enumerate(mixch):
+            mix = np.zeros(nm, np.int64)
+            for vid in (4 + 2 * k, 5 + 2 * k):
+                s0 = st.get(vid)
+                if s0 is None:
+                    continue
+                t = table[s0['smp']]; a = smps[s0['smp']]
+                step = (MIX_PERIOD << 16) // s0['per']
+                pp = s0['pos'] + step * np.arange(nm, dtype=np.int64)
+                ip = pp >> 16
+                if t['ll']:
+                    lb, ll = t['lb'], t['ll']
+                    over = ip >= lb + ll
+                    ip = np.where(over, lb + (ip - lb) % ll, ip)
+                    ok = np.ones(nm, bool)
+                else:
+                    ok = ip < len(a)
+                ip = np.clip(ip, 0, len(a) - 1)
+                q = min(32, s0['vol'])
+                mix += np.where(ok, (a[ip] * q) >> 6, 0)
+                endp = s0['pos'] + step * nm
+                if t['ll'] and (endp >> 16) >= t['lb'] + t['ll']:
+                    e = (endp >> 16) - t['lb']
+                    endp = ((t['lb'] + e % t['ll']) << 16) | (endp & 0xffff)
+                s0['pos'] = endp
+                if not t['ll'] and (endp >> 16) >= len(a):
+                    del st[vid]
+            mix = ((mix + 128) & 255) - 128     # 8 bit wrap like the hardware
+            # hold each mixer sample until the next (Paula)
+            if nm:
+                ti = np.minimum((np.arange(n) * nm) // max(n, 1), nm - 1)
+                buf[side[c]] += mix[ti]
+        out[0].append(buf[0]); out[1].append(buf[1])
+    L = np.concatenate(out[0]); R = np.concatenate(out[1])
+    stv = np.stack([L, R], 1) / 256.0 * 0.84
+    pcm = np.clip(stv * 32767, -32768, 32767).astype('<i2')
+    w = wave.open(path, 'wb'); w.setnchannels(2); w.setsampwidth(2); w.setframerate(rate)
+    w.writeframes(pcm.tobytes()); w.close()
 
 
 def render_wav(path, alloc, table, bank, rate=44100, seconds=None):
@@ -738,6 +858,7 @@ def main():
     ap.add_argument('--wav', action='store_true')
     ap.add_argument('--prio', help='note priorities from a reference arrangement (expert_prio.py)')
     ap.add_argument('--old-alloc', action='store_true')
+    ap.add_argument('--mixmask', type=int, default=0, help='Paula channels used as CPU mixers (2 voices each)')
     ap.add_argument('--trim-order', type=int, help='write <out>.trim: bank size needed from this order on')
     a = ap.parse_args()
     mod = S3M(a.s3m)
@@ -769,12 +890,13 @@ def main():
         else:
             import paula_alloc
             al = paula_alloc.allocate(mod, ticks, table, chmap,
-                                      paula_alloc.load_prio(a.prio) if a.prio else None)
-        recs = encode_stream(al, table)
-        st = write_chunked('%s_%d.str' % (a.out, so), recs)
+                                      paula_alloc.load_prio(a.prio) if a.prio else None,
+                                      paula_alloc.slots_for(a.mixmask))
+        recs = encode_stream(al, table, a.mixmask)
+        st = write_chunked('%s_%d.str' % (a.out, so), recs, mixmask=a.mixmask)
         print('stream from order %d: %d bytes raw, %d chunked+packed' % (so, sum(map(len, recs)), st))
         if a.wav:
-            render_wav('%s_%d.wav' % (a.out, so), al, table, bank)
+            render_stream('%s_%d.wav' % (a.out, so), al, table, bank, a.mixmask)
 
 
 if __name__ == '__main__':

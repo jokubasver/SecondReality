@@ -14,9 +14,11 @@ struct smp {
 } __attribute__((packed));
 
 struct stream_hdr {
-    u32 magic;
+    u32 magic;             /* 'SRSM' */
     u16 nchunks;
     u16 maxchunk;
+    u16 mixmask;           /* Paula channels used as software mixers */
+    u16 mixper;            /* their Paula period */
     u32 chunk[1];          /* nchunks + 1 offsets, relative to header */
 };
 
@@ -60,12 +62,14 @@ void k_music_init(void)
     set_tempo(14188);
     CIAB_CRA = 0x11;                  /* continuous, force load, start */
     CIAB_ICR = 0x83;                  /* enable timer A and B interrupts */
+    k_mix_init();
     INTENA = INTF_SETCLR | INTF_EXTER;
 }
 
 static void silence(void)
 {
     int i;
+    k_mix_stop_all();
     DMACON = DMAF_AUD0 | DMAF_AUD1 | DMAF_AUD2 | DMAF_AUD3;
     for (i = 0; i < 4; i++) {
         AUDVOL(i) = 0;
@@ -104,6 +108,7 @@ void k_music_start(const void *bank, const void *str)
     fade_speed = 0;
     k_mus_volume = 64;
     cur_master = 64;
+    k_mix_start(stream->mixmask, stream->mixper, 64);
     playing = 1;
 }
 
@@ -131,6 +136,73 @@ void k_music_slow(void)
 
 static inline u16 rd16(const u8 *p) { return (p[0] << 8) | p[1]; }
 
+static u16 mper[4];
+
+/* one voice of a record: Paula channel 0-3, or mixed voice 4-7 */
+static void voice_event(int ch)
+{
+    u8 cf = *sp++;
+    if (ch >= 4) {
+        int v = ch - 4;
+        if (cf & 1) {
+            const struct smp *s = &bank_tab[sp[0]];
+            u16 offw = rd16(sp + 1);
+            sp += 3;
+            k_mix_trigger(v, bank_pcm + s->off, (u32)s->len * 2, (u32)s->lb * 2,
+                          (u32)s->ll * 2, (u32)offw * 2);
+        }
+        if (cf & 2) {
+            mper[v] += (s8)*sp++;
+            k_mix_period(v, mper[v]);
+        }
+        if (cf & 4) {
+            mper[v] = rd16(sp);
+            sp += 2;
+            k_mix_period(v, mper[v]);
+        }
+        if (cf & 8)
+            k_mix_volume(v, *sp++);
+        if (cf & 16)
+            k_mix_stop(v);
+        return;
+    }
+    if (cf & 1) {
+        const struct smp *s = &bank_tab[sp[0]];
+        u16 offw = rd16(sp + 1);
+        const u8 *base = bank_pcm + s->off;
+        sp += 3;
+        DMACON = 1 << ch;
+        AUDLC(ch) = (u32)(base + offw * 2);
+        AUDLEN(ch) = s->len > offw ? s->len - offw : 1;
+        if (s->ll) {
+            loop_lc[ch] = (u32)(base + s->lb * 2);
+            loop_len[ch] = s->ll;
+        } else {
+            loop_lc[ch] = (u32)bank_pcm;   /* 4 zero bytes */
+            loop_len[ch] = 1;
+        }
+        dmamask |= 1 << ch;
+    }
+    if (cf & 2) {
+        per[ch] += (s8)*sp++;
+        AUDPER(ch) = per[ch];
+    }
+    if (cf & 4) {
+        per[ch] = rd16(sp);
+        sp += 2;
+        AUDPER(ch) = per[ch];
+    }
+    if (cf & 8) {
+        chvol[ch] = *sp++;
+        AUDVOL(ch) = (chvol[ch] * cur_master) >> 6;
+    }
+    if (cf & 16) {
+        DMACON = 1 << ch;
+        AUDVOL(ch) = 0;
+        chvol[ch] = 0;
+    }
+}
+
 void k_music_tick(void)
 {
     u8 f;
@@ -141,7 +213,9 @@ void k_music_tick(void)
     if (cur_master != k_mus_volume) {
         cur_master = k_mus_volume;
         for (ch = 0; ch < 4; ch++)
-            AUDVOL(ch) = (chvol[ch] * cur_master) >> 6;
+            if (!(k_mix_mask & (1 << ch)))
+                AUDVOL(ch) = (chvol[ch] * cur_master) >> 6;
+        k_mix_master(cur_master);
     }
     if (skip) {
         skip--;
@@ -187,45 +261,11 @@ again:
         }
 #endif
     }
-    for (ch = 0; ch < 4; ch++) {
-        u8 cf;
-        if (!(f & (1 << ch)))
-            continue;
-        cf = *sp++;
-        if (cf & 1) {
-            const struct smp *s = &bank_tab[sp[0]];
-            u16 offw = rd16(sp + 1);
-            const u8 *base = bank_pcm + s->off;
-            sp += 3;
-            DMACON = 1 << ch;
-            AUDLC(ch) = (u32)(base + offw * 2);
-            AUDLEN(ch) = s->len > offw ? s->len - offw : 1;
-            if (s->ll) {
-                loop_lc[ch] = (u32)(base + s->lb * 2);
-                loop_len[ch] = s->ll;
-            } else {
-                loop_lc[ch] = (u32)bank_pcm;   /* 4 zero bytes */
-                loop_len[ch] = 1;
-            }
-            dmamask |= 1 << ch;
-        }
-        if (cf & 2) {
-            per[ch] += (s8)*sp++;
-            AUDPER(ch) = per[ch];
-        }
-        if (cf & 4) {
-            per[ch] = rd16(sp);
-            sp += 2;
-            AUDPER(ch) = per[ch];
-        }
-        if (cf & 8) {
-            chvol[ch] = *sp++;
-            AUDVOL(ch) = (chvol[ch] * cur_master) >> 6;
-        }
-        if (cf & 16) {
-            DMACON = 1 << ch;
-            AUDVOL(ch) = 0;
-            chvol[ch] = 0;
+    if (f & 1) {
+        u8 mask = *sp++;
+        for (ch = 0; ch < 8; ch++) {
+            if (mask & (1 << ch))
+                voice_event(ch);
         }
     }
     if (dmamask && !dmaphase) {
@@ -270,6 +310,8 @@ void k_music_skip_to(int order)
         if (dmaphase) { dmaphase = 0; dmamask = 0; }
     }
     silence();
+    if (stream)
+        k_mix_start(stream->mixmask, stream->mixper, cur_master);
 }
 
 /* nonzero once the music is at or past order o, row r: marker waits use

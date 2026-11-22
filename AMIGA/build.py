@@ -93,7 +93,7 @@ def build_music():
 
 def build_kernel(defs):
     srcs = [os.path.join(ROOT, 'src/kernel', x) for x in
-            ('start.S', 'kernel.c', 'loader.c', 'music.c', 'lib.c', 'sintab.c', 'demo.c', 'panic.c', 'gfx.c', 'math.S', 'unlz.S')]
+            ('start.S', 'kernel.c', 'loader.c', 'music.c', 'lib.c', 'sintab.c', 'demo.c', 'panic.c', 'gfx.c', 'math.S', 'unlz.S', 'mixer.c', 'mixasm.S')]
     objs = compile_dir(srcs, os.path.join(B, 'obj/kernel'), defs)
     elf = os.path.join(B, 'kernel.elf')
     run([LD, '--no-warn-rwx-segments', '-z', 'noexecstack', '-T', os.path.join(ROOT, 'tools/kernel.ld'), '-o', elf] + objs)
@@ -223,6 +223,8 @@ def main():
     defs = [] if a.release else ['-DDEBUG']
     if a.skip_intro:
         defs.append('-DSKIP_INTRO')
+    if os.environ.get('MIXBENCH'):
+        defs.append('-DMIXBENCH')
     if os.environ.get('MEMSTAT'):
         defs.append('-DMEMSTAT')
     if os.environ.get('OVERLAY'):

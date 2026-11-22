@@ -171,8 +171,9 @@ lev3:
 	movem.l	(sp)+,d0-d1/a0-a1
 	rte
 lev4:
-	move.w	#0x0780,0xdff09c
-	move.w	#0x0780,0xdff09c
+	movem.l	d0-d1/a0-a1,-(sp)
+	jsr	k_level4
+	movem.l	(sp)+,d0-d1/a0-a1
 	rte
 lev5:
 	move.w	#0x1800,0xdff09c

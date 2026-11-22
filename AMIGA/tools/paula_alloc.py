@@ -133,19 +133,37 @@ def extract_notes(mod, ticks, chmap, prio=None):
     return notes
 
 
-def allocate(mod, ticks, table, chmap, prio=None):
-    """Same output as s3m2paula.allocate: per tick (marker, res[4], tempo),
-    res[p] = (smp, pos, hz, vol, trig, virt) or None."""
+# slot = (stream voice id, side 0 left / 1 right, mixed by the CPU)
+SLOTS_4 = [(0, 0, False), (1, 1, False), (2, 1, False), (3, 0, False)]
+
+
+def slots_for(mixmask):
+    """Paula channels in mixmask are CPU mixers of 2 voices each (stream ids
+    4,5 for the first mixer channel, 6,7 for the second)."""
+    side = {0: 0, 1: 1, 2: 1, 3: 0}
+    sl = [(c, side[c], False) for c in range(4) if not mixmask & (1 << c)]
+    k = 4
+    for c in range(4):
+        if mixmask & (1 << c):
+            sl += [(k, side[c], True), (k + 1, side[c], True)]
+            k += 2
+    return sl
+
+
+def allocate(mod, ticks, table, chmap, prio=None, slots=SLOTS_4):
+    """Per tick (marker, res[8], tempo); res[id] = (smp, pos, hz, vol, trig, virt)
+    or None, id = stream voice id of the slot."""
     notes = [n for n in extract_notes(mod, ticks, chmap, prio) if n['smp'] in table]
     starts = {}
     for i, n in enumerate(notes):
         starts.setdefault(n['start'], []).append(i)
-    chan = [None] * 4            # note index per Paula channel
-    active = set()               # notes alive (assigned or waiting)
+    ns = len(slots)
+    chan = [None] * ns           # note index per slot
+    active = set()
     out = []
 
-    def side(vi):
-        return LEFT_CH if vi % 2 == 0 else RIGHT_CH
+    def own(ni, p):
+        return slots[p][1] == notes[ni]['virt'] % 2
 
     def worth(ni, t, p):
         n = notes[ni]
@@ -153,36 +171,35 @@ def allocate(mod, ticks, table, chmap, prio=None):
         if k >= len(n['val']):
             return 0.0
         v = n['val'][k]
-        if p not in side(n['virt']):
+        if not own(ni, p):
             v *= CROSS_SIDE
         return v
 
     for t, (mk, voices, tempo) in enumerate(ticks):
-        # notes that ended free their channel
-        for p in range(4):
+        for p in range(ns):
             if chan[p] is not None and notes[chan[p]]['end'] <= t:
                 chan[p] = None
         active = {ni for ni in active if notes[ni]['end'] > t}
         new = sorted(starts.get(t, []), key=lambda ni: -notes[ni]['val'][0])
         active |= set(new)
         triggered = set()
-        # new notes first (by value), then waiting notes that could start late
         waiting = sorted((ni for ni in active if ni not in chan and ni not in new),
-                         key=lambda ni: -worth(ni, t, side(notes[ni]['virt'])[0]))
+                         key=lambda ni: -notes[ni]['val'][min(t - notes[ni]['start'], len(notes[ni]['val']) - 1)])
         for ni in new + waiting:
             n = notes[ni]
             k = t - n['start']
             onset = ni in new
             if not onset and n['loud'][k] < QUIET * 4:
-                continue                 # not worth a late start
+                continue
             best = None
-            for p in sorted(range(4), key=lambda p: p not in side(n['virt'])):
+            # own side first, then direct (hardware) slots before mixed ones
+            for p in sorted(range(ns), key=lambda p: (not own(ni, p), slots[p][2])):
                 cur = chan[p]
                 if cur is None:
-                    cand = (1e9, p)
+                    cand = (1e9 - (1e6 if slots[p][2] else 0), p)
                 else:
                     if cur in triggered:
-                        continue         # do not steal a note started this tick
+                        continue
                     cn = notes[cur]
                     ck = t - cn['start']
                     if cn['loud'][ck] < QUIET:
@@ -193,15 +210,15 @@ def allocate(mod, ticks, table, chmap, prio=None):
                         if mine <= theirs:
                             continue
                         cand = (mine - theirs, p)
-                if p not in side(n['virt']):
+                if not own(ni, p):
                     cand = (cand[0] * CROSS_SIDE, p)
-                if best is None or cand > best:
+                if best is None or cand[0] > best[0]:
                     best = cand
             if best is not None:
                 chan[best[1]] = ni
                 triggered.add(ni)
-        res = [None] * 4
-        for p in range(4):
+        res = [None] * 8
+        for p in range(ns):
             ni = chan[p]
             if ni is None:
                 continue
@@ -212,9 +229,9 @@ def allocate(mod, ticks, table, chmap, prio=None):
                 continue
             smp, pos, hz, vol, trig = st
             if ni in triggered and trig is None:
-                trig = int(pos)          # late start / moved: from the current position
+                trig = int(pos)
             if ni not in triggered:
                 trig = None
-            res[p] = (smp, pos, hz, vol, trig, n['virt'])
+            res[slots[p][0]] = (smp, pos, hz, vol, trig, n['virt'])
         out.append((mk, res, tempo))
     return out

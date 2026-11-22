@@ -85,6 +85,17 @@ as a stream of Paula register writes; the DIS music sync calls
   order 92, which makes room for the last parts.
 - The audio filter ("LED") is switched off.
 
+Software mixer (prototype, off by default): `MIXMASK=8` (5 voices: Paula
+channel 3 plays 2 voices mixed by the CPU) or `MIXMASK=12` (6 voices:
+channels 2 and 3 each mix 2) when building; `rm -rf build/music` after
+changing it.  `src/kernel/mixer.c`/`mixasm.S` mix 128 sample blocks at
+8287 Hz from the audio interrupt (at interrupt level 2); the converter
+sends mixed voices' events a tick early to make up for the block latency.
+Measured on a 68000 (FS-UAE, cycle exact, idle loop count with the
+`test` part as CPU meter): 5 voices cost 16.6% of the CPU, 6 voices 31.6%
+(the inner loop alone ~28%).  `s3m2paula.py --mixmask N --wav` renders
+what the Amiga plays, mixer included.
+
 `tools/musdiff.py` renders the original 8 voice mix and the conversion and
 reports where they differ (`--wav` writes both).
 

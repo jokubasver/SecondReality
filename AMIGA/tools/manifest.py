@@ -1,10 +1,16 @@
 """Demo file manifest: the order here defines file ids (F_<name>) and disk layout."""
 
 # (output name, module, start orders [a-b = stop at b], sample budget bytes)
+# Paula channels mixed by the CPU (2 voices each): 0 = 4 voices,
+# 8 = 5 voices (channel 3 mixes), 12 = 6 voices (channels 2 and 3 mix)
+import os as _os
+MIXMASK = _os.environ.get('MIXMASK', '0')
+
 # name, module, stream start orders, sample budget, extra converter options
 MUSIC = [
-    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000, []),
-    ('mus1', '../MAIN/MUSIC1.S3M', '0', 320000, ['--prio', 'tools/mus1_prio.json', '--trim-order', '92']),
+    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000, ['--mixmask', MIXMASK]),
+    ('mus1', '../MAIN/MUSIC1.S3M', '0', 320000, ['--prio', 'tools/mus1_prio.json', '--trim-order', '92',
+                                                 '--mixmask', MIXMASK]),
 ]
 
 # part directories under src/parts

@@ -54,6 +54,18 @@ void k_music_dma(void);
 void k_music_slow(void);
 void k_music_fade(int speed);
 
+/* software mixer */
+void k_mix_init(void);
+void k_mix_start(u16 mask, u16 period, u8 master);
+void k_mix_stop_all(void);
+void k_mix_master(u8 master);
+void k_mix_trigger(int v, const u8 *smp, u32 lenb, u32 lbb, u32 llb, u32 offb);
+void k_mix_period(int v, u16 per);
+void k_mix_volume(int v, u8 vol);
+void k_mix_stop(int v);
+extern u16 k_mix_mask;
+extern volatile u32 k_mix_lines;
+
 /* memory */
 void k_mem_init(void);
 void k_mem_free_tag(int tag);
