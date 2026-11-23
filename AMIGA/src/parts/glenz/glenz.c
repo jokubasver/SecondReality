@@ -123,6 +123,10 @@ static void transform(const s16 *pts, const s16 *mw, int scale_x, int scale_y, i
 }
 
 static int bbx0, bbx1, bby0, bby1;
+/* what was drawn into each buffer (and the scratch plane) last time: only
+ * that area is cleared (words x, width, rows y, height; height < 0: all) */
+static s16 lbx[2], lbw[2], lby[2], lbh[2] = { -1, -1 }, lcp[2];
+static s16 sbx, sbw = BPR / 2, sby, sbh = H;
 
 static void bbox_points(void)
 {
@@ -553,10 +557,19 @@ void part_main(void)
             int used_scratch = 0;
             if (frame > 800) clear_planes = 5;
             k_wait_blitter();
-            k_blit_clear(bf + (5 - clear_planes) * PL, 0, BPR / 2, H * clear_planes > 1023 ? 1000 : H * clear_planes);
-            if (H * clear_planes > 1000)
-                k_blit_clear(bf + (5 - clear_planes) * PL + 1000 * BPR, 0, BPR / 2, H * clear_planes - 1000);
-            k_blit_clear(scratch, 0, BPR / 2, H);
+            if (lbh[cur] < 0 || lcp[cur] != clear_planes) {
+                k_blit_clear(bf + (5 - clear_planes) * PL, 0, BPR / 2, H * clear_planes > 1023 ? 1000 : H * clear_planes);
+                if (H * clear_planes > 1000)
+                    k_blit_clear(bf + (5 - clear_planes) * PL + 1000 * BPR, 0, BPR / 2, H * clear_planes - 1000);
+                lcp[cur] = clear_planes;
+            } else if (lbh[cur] > 0) {
+                int p;
+                for (p = 5 - clear_planes; p < 5; p++)
+                    k_blit_clear(bf + p * PL + lby[cur] * BPR + lbx[cur] * 2, BPR - 2 * lbw[cur], lbw[cur], lbh[cur]);
+            }
+            if (sbh > 0)
+                k_blit_clear(scratch + sby * BPR + sbx * 2, BPR - 2 * sbw, sbw, sbh);
+            sbh = 0;
             k_wait_blitter();
             bbx0 = bby0 = 32767;
             bbx1 = bby1 = -32768;
@@ -577,8 +590,24 @@ void part_main(void)
             if (bbx1 > W - 1) bbx1 = W - 1;
             if (bby0 < 0) bby0 = 0;
             if (bby1 > H) bby1 = H;
+            lbh[cur] = 0;
+            if (used_scratch) {
+                sbx = sby = 0;          /* (narrowed below) */
+                sbw = BPR / 2;
+                sbh = H;
+            }
             if (bbx0 <= bbx1 && bby0 < bby1) {
                 int wx0 = bbx0 >> 4, ww = (bbx1 >> 4) - wx0 + 1, p;
+                lbx[cur] = wx0;
+                lbw[cur] = ww;
+                lby[cur] = bby0;
+                lbh[cur] = (bby1 + 1 > H ? H : bby1 + 1) - bby0;
+                if (used_scratch) {
+                    sbx = wx0;
+                    sbw = ww;
+                    sby = bby0;
+                    sbh = lbh[cur];
+                }
                 for (p = (frame > 800 ? 0 : 2); p < 5; p++)
                     xf_fill(bf + p * PL, BPR, wx0, ww, bby0, bby1 - bby0);
                 if (used_scratch) {
