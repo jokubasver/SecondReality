@@ -16,6 +16,9 @@
 #define NROWS 202
 #define BUFSZ (ROW * NROWS)
 
+/* gravity for n phases: ball b gets n steps, or n + 1 - spawn[b] when it
+ * was dropped in phase spawn[b] */
+void dots_phys(s16 *dots, int count, const u8 *spawn, int n, int gravity, int gravd);
 void dots_draw(const s16 *dots, int n, u8 *buf, int rotsin, int rotcos,
                const s16 *inv, const u32 *pat, const u32 *rowoff, const u8 *lev);
 
@@ -29,6 +32,7 @@ static u32 *cop[3];
 static u16 *colp[3], *floorp[3];
 static u8 pal[132 * 3];         /* 0..31 colours, 32..131 floor lines */
 static u32 seed = 1;
+static u8 spawn[DOTN];          /* phase (1..) a ball was dropped in, 0 = none */
 
 static int rnd(void)            /* MSC rand() */
 {
@@ -60,7 +64,7 @@ void part_main(void)
     u32 *c;
     int a, b, i, j = 0, f = 0, frame = 0, cur = 0;
     int dropper = 22000, grav = 3, gravd = 13, rot = 0, rots = 0, rota = -64;
-    int rotsin = 0, rotcos = 0, gravity = 3, gravityd = 13;
+    int rotsin = 0, rotcos = 0, gravity = 3, nph;
     u32 t0, ph;
     /* tables */
     for (a = 0; a < 16; a++) {
@@ -163,7 +167,11 @@ void part_main(void)
         a = k_mus_plus();
         if (a > -4 && a < 0) break;
         if (frame > 2300) setpal(pal2);
-        while (ph < now) {
+        /* the 70 Hz phases since the last update: the new balls first,
+         * then the gravity for all of them in one pass (a ball dropped
+         * in phase p gets the steps from p on) */
+        nph = 0;
+        while (ph < now && nph < 64) {
             ph++;
             frame++;
             if (frame == 500) f = 0;
@@ -214,20 +222,21 @@ void part_main(void)
             } else
                 rot = isin(rots);
             f++;
-            gravity = grav;
-            gravityd = gravd;
-            /* gravity and bounces (drawdots in the original, once per frame) */
-            for (b = 0; b < DOTN; b++) {
-                s16 *d = dot[b];
-                int y;
-                d[3] += gravity;
-                y = d[1] + d[3];
-                if (y >= 8105) {
-                    d[3] = (s16)(-d[3] * gravityd) >> 4;
-                    y += d[3];
-                }
-                d[1] = y;
+            if (nph && grav != gravity) {
+                /* the gravity changed with this phase: the steps so far
+                 * with the old one first (none for the new ball) */
+                spawn[i] = nph + 1;
+                dots_phys(&dot[0][0], DOTN, spawn, nph, gravity, gravd);
+                nph = 0;
+                memset(spawn, 0, sizeof(spawn));
             }
+            gravity = grav;
+            spawn[i] = nph + 1;         /* first step of ball i */
+            nph++;
+        }
+        if (nph) {
+            dots_phys(&dot[0][0], DOTN, spawn, nph, gravity, gravd);
+            memset(spawn, 0, sizeof(spawn));
         }
         dots_draw(&dot[0][0], DOTN, buf[cur], rotsin, rotcos, dinv, pat + 16, rowoff, lev);
         k_set_copper(cop[cur]);

@@ -107,3 +107,45 @@ dots_draw:
 	addq.l	#2,sp
 .Lend:	movem.l	(sp)+,d2-d7/a2-a6
 	rts
+
+| void dots_phys(s16 *dots, int count, const u8 *spawn, int n, int gravity, int gravd)
+|   gravity and floor bounces for n 70 Hz phases; a ball dropped in phase
+|   spawn[b] (1..n) gets n + 1 - spawn[b] steps, the others n
+	.globl	dots_phys
+dots_phys:
+	movem.l	d2-d7/a2,-(sp)
+	move.l	32(sp),a0		| dots
+	move.l	36(sp),d7		| count
+	move.l	40(sp),a1		| spawn
+	move.l	44(sp),d6		| n
+	move.l	48(sp),d4		| gravity
+	move.l	52(sp),d5		| gravd
+	subq.w	#1,d7
+	bmi.s	9f
+	move.w	#8105,a2
+1:	move.w	d6,d3			| steps
+	moveq	#0,d0
+	move.b	(a1)+,d0
+	beq.s	2f
+	subq.w	#1,d0
+	sub.w	d0,d3
+	beq.s	5f
+2:	move.w	2(a0),d1		| y
+	move.w	6(a0),d0		| yadd
+	subq.w	#1,d3
+3:	add.w	d4,d0
+	add.w	d0,d1
+	cmp.w	a2,d1
+	bge.s	6f
+4:	dbf	d3,3b
+	move.w	d1,2(a0)
+	move.w	d0,6(a0)
+5:	addq.l	#8,a0
+	dbf	d7,1b
+9:	movem.l	(sp)+,d2-d7/a2
+	rts
+6:	neg.w	d0			| bounce: yadd = (s16)(-yadd * gravd) >> 4
+	muls	d5,d0
+	asr.w	#4,d0
+	add.w	d0,d1
+	bra.s	4b
