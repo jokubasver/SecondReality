@@ -38,6 +38,7 @@ struct v3scene {
 struct v3screen {
     u8 *planes[5];          /* destination bitplanes (40 bytes per row) */
     u8 *scratch;            /* one plane, same size, must be clear */
+    u8 *scratch2;           /* a second one (polygons alternate) */
     int h;                  /* rows */
     int addx, addy;         /* projection centre */
     int clipy0, clipy1;     /* clip rows [y0, y1) */

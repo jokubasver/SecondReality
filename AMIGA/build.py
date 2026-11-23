@@ -226,7 +226,9 @@ def main():
     if os.environ.get('MIXBENCH'):
         defs.append('-DMIXBENCH')
     if os.environ.get('V3PROF'):
-        defs.append('-DV3PROF')
+        defs.append('-DV3PROF=' + os.environ['V3PROF'])
+    for x in os.environ.get('XDEFS', '').split():
+        defs.append('-D' + x)
     if os.environ.get('FPSSTAT'):
         defs.append('-DFPSSTAT')
     if os.environ.get('MEMSTAT'):

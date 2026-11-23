@@ -233,8 +233,14 @@ void k_blank(void)
 void k_wait_blitter(void)
 {
     (void)DMACONR;
-    while (DMACONR & DMAF_BLTDONE)
-        ;
+    if (DMACONR & DMAF_BLTDONE) {
+        /* the CPU only waits: the blitter gets every bus cycle meanwhile
+         * (its code and polling in chip RAM would slow it down) */
+        DMACON = DMAF_SETCLR | DMAF_BLITHOG;
+        while (DMACONR & DMAF_BLTDONE)
+            ;
+        DMACON = DMAF_BLITHOG;
+    }
 }
 
 /* ---------------------------------------------------------------- memory */

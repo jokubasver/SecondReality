@@ -14,7 +14,7 @@
 #define PSIZE (40 * H)
 
 static u8 *buf[2];
-static u8 *scratch;
+static u8 *scratch, *scratch2;
 static u32 *cop[2];
 static u16 *colp[2];
 static struct v3scene sc;
@@ -71,6 +71,9 @@ void part_main(void)
     buf[0] = k_alloc(PSIZE * 5);
     buf[1] = k_alloc(PSIZE * 5);
     scratch = k_alloc(PSIZE + 80);
+    scratch2 = k_alloc(PSIZE + 80);
+    memset(scratch, 0, PSIZE + 80);
+    memset(scratch2, 0, PSIZE + 80);
     cop[0] = k_alloc(80 * 4);
     cop[1] = k_alloc(80 * 4);
     build_copper(0);
@@ -122,6 +125,7 @@ void part_main(void)
     set_cols(0);
 
     scr.scratch = scratch;
+    scr.scratch2 = scratch2;
     scr.h = H;
     scr.addx = 159;
     scr.addy = 74;
@@ -141,6 +145,9 @@ void part_main(void)
         k_waitvbl();
         /* the animation runs at 35 frames per second */
         target = (k_frames - t0) * 7 / 10;
+#ifdef V3PROF
+        target = frame + 2;         /* benchmark: fixed frames */
+#endif
         while (frame < target && !sc.wrapped) {
             v3_step(&sc);
             frame++;

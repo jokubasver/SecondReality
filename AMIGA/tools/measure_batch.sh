@@ -5,10 +5,10 @@ cd "$(dirname "$0")/.."
 mkdir -p /tmp/claude-0/mb
 for spec in "$@"; do
   IFS=: read P M O <<< "$spec"
-  OVERLAY=1 FPSSTAT=1 python3 build.py --test $P --music $M --order $O 2>&1 | grep -iE "error|Traceback"
+  env OVERLAY=1 ${PROF:-FPSSTAT}=1 python3 build.py --test $P --music $M --order $O 2>&1 | grep -iE "error|Traceback"
   mkdir -p /tmp/claude-0/mb/$P && cp build/SecondReality1.adf build/SecondReality2.adf /tmp/claude-0/mb/$P/
 done
-TS=$(seq 25 5 110)
+TS=${TS:-$(seq 25 5 110)}
 run() {
   P=$1
   EMU_ARGS="--floppy_drive_1=/tmp/claude-0/mb/$P/SecondReality2.adf" tools/emu.sh /tmp/claude-0/mb/$P/SecondReality1.adf /tmp/claude-0/mb/$P/s $TS >/dev/null 2>&1
