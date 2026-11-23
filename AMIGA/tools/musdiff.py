@@ -117,6 +117,8 @@ def main():
     ap.add_argument('--budget', type=int, default=240000)
     ap.add_argument('--wav')
     ap.add_argument('--seconds', type=float)
+    ap.add_argument('--stereo', action='store_true', help='compare left and right separately')
+    ap.add_argument('--prio', help='note priorities (as s3m2paula --prio)')
     a = ap.parse_args()
     mod = S3M(a.s3m)
     SP.alias_inverted(mod, verbose=False)
@@ -139,16 +141,28 @@ def main():
         al = SP.allocate(mod, ticks, table, chmap)
     else:
         import paula_alloc
-        al = paula_alloc.allocate(mod, ticks, table, chmap)
-    ref = render_ref(mod, ticks, chmap)
-    pau = render_paula(al, table, bank)
-    n = min(len(ref), len(pau))
-    ref, pau = ref[:n], pau[:n]
-    if a.alloc == 'all':
-        pau = pau / 2.0
-    E1, E2 = band_energy(ref), band_energy(pau)
-    E2 = E2 - (E2 - E1).mean(0)          # ignore a constant level difference per band
-    d = np.sqrt(np.mean((E1 - E2) ** 2, axis=1))
+        al = paula_alloc.allocate(mod, ticks, table, chmap,
+                                  paula_alloc.load_prio(a.prio) if a.prio else None)
+    sides = [(None, None)]
+    if a.stereo:
+        # left: virtual voices 0,2,4,6 / Paula 0,3 (or ids 0,2,4,6 for 'all')
+        sides = [(0, (0, 3) if a.alloc != 'all' else (0, 2, 4, 6)),
+                 (1, (1, 2) if a.alloc != 'all' else (1, 3, 5, 7))]
+    ds = []
+    for side, chs in sides:
+        cm = chmap if side is None else [c if i % 2 == side else None for i, c in enumerate(chmap)]
+        als = al if side is None else [(mk, [x if i in chs else None for i, x in enumerate(res)], tp)
+                                       for mk, res, tp in al]
+        ref = render_ref(mod, ticks, cm)
+        pau = render_paula(als, table, bank)
+        n = min(len(ref), len(pau))
+        ref, pau = ref[:n], pau[:n]
+        if a.alloc == 'all':
+            pau = pau / 2.0
+        E1, E2 = band_energy(ref), band_energy(pau)
+        E2 = E2 - (E2 - E1).mean(0)          # ignore a constant level difference per band
+        ds.append(np.sqrt(np.mean((E1 - E2) ** 2, axis=1)))
+    d = np.mean(ds, axis=0)
     print('mean distance %.2f dB, 90%% %.2f, max %.2f' % (d.mean(), np.percentile(d, 90), d.max()))
     # worst stretches (2 s windows)
     mk = frames_markers(ticks)

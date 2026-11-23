@@ -17,11 +17,15 @@ lookahead (the whole song is known in advance):
 import numpy as np
 
 LEFT_CH, RIGHT_CH = (0, 3), (1, 2)
-WINDOW = 24          # ticks of lookahead (~0.45 s at 52 Hz)
-ONSET_BONUS = 1.6    # attacks matter more than tails
+# tuned against the original 8 voice mix, left and right compared
+# separately (tools/musdiff.py --stereo); a voice never moves to the
+# other side: a pad doubled on both sides lost one side's copy and the
+# mix leaned to one ear
+WINDOW = 6           # ticks of lookahead
+ONSET_BONUS = 3.5    # attacks matter more than tails
 STAY_BONUS = 1.25    # hysteresis against swapping
-CROSS_SIDE = 0.6     # value factor for playing a voice on the other side
-QUIET = 0.6          # loudness below which a channel counts as free
+CROSS_SIDE = 0.0     # value factor for playing a voice on the other side
+QUIET = 0.2          # loudness below which a channel counts as free
 
 
 ECHO = 0.45          # value factor for echo/doubling voices
