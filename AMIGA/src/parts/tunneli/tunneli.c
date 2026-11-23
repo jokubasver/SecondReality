@@ -16,9 +16,10 @@ void tun_ring(const s16 *pts, int dx, int dy40, u8 *plane, int mask);
 
 struct ring { s16 x, y; u8 c; };
 static struct ring putki[101];
-static u8 *buf[2];
-static u32 *cop[2];
+static u8 *buf[3];                  /* triple: the blitter clears one */
+static u32 *cop[3];
 static int sade[101];
+static s16 ext[101][4];             /* ring extents: x min/max, y*40 min/max */
 
 static void build_copper(int b)
 {
@@ -57,23 +58,36 @@ void part_main(void)
 {
     int x, cur = 0, frame = 0, sx = 0, sy = 0, quit = 0;
     u32 last;
-    buf[0] = k_alloc(PL * 4);
-    buf[1] = k_alloc(PL * 4);
-    cop[0] = k_alloc(64 * 4);
-    cop[1] = k_alloc(64 * 4);
-    build_copper(0);
-    build_copper(1);
-    for (x = 0; x <= 100; x++)
+    for (x = 0; x < 3; x++) {
+        buf[x] = k_alloc(PL * 4);
+        cop[x] = k_alloc(64 * 4);
+        memset(buf[x], 0, PL * 4);
+        build_copper(x);
+    }
+    for (x = 0; x <= 100; x++) {
+        const s16 *p;
+        int i;
         sade[x] = 16384 / (x * 7 + 95);
+        p = pcalc + sade[x] * 128;
+        ext[x][0] = ext[x][2] = 32767;
+        ext[x][1] = ext[x][3] = -32768;
+        for (i = 0; i < 64; i++, p += 2) {
+            if (p[0] < ext[x][0]) ext[x][0] = p[0];
+            if (p[0] > ext[x][1]) ext[x][1] = p[0];
+            if (p[1] < ext[x][2]) ext[x][2] = p[1];
+            if (p[1] > ext[x][3]) ext[x][3] = p[1];
+        }
+    }
     memset(putki, 0, sizeof(putki));
     k_set_copper(cop[0]);
     last = k_frames;
     while (!quit && !k_exit()) {
         int steps;
         u8 *b;
-        cur ^= 1;
+        /* draw into the buffer the blitter cleared meanwhile, start
+         * clearing the one shown until now */
+        cur = cur == 2 ? 0 : cur + 1;
         b = buf[cur];
-        k_blit_clear(b, 0, 20, 4 * H);       /* 4 planes = 800 rows */
         k_wait_blitter();
         for (x = 80; x >= 4; x--) {
             int bx = putki[x].x - putki[5].x;
@@ -87,10 +101,15 @@ void part_main(void)
             if (idx < 1) idx = 1;
             if (idx > 7) idx = 7;
             if (c == 128) idx |= 8;
+            if (bx + ext[x][0] >= 0 && bx + ext[x][1] <= 319 &&
+                by * 40 + ext[x][2] >= 0 && by * 40 + ext[x][3] <= 199 * 40)
+                idx |= 16;                  /* on the screen: no clipping */
             tun_ring(pcalc + sade[x] * 128, bx, by * 40, b, idx);
         }
         k_set_copper(cop[cur]);
         k_waitvbl();
+        k_wait_blitter();
+        k_blit_clear(buf[cur ? cur - 1 : 2], 0, 20, 4 * H);   /* 4 planes = 800 rows */
         /* advance the tunnel one ring per 70 Hz frame */
         steps = (k_frames - last) * 7 / 5 - frame;     /* last = start */
         while (steps-- > 0) {
