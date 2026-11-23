@@ -132,8 +132,20 @@ static void interference(void)
     int sinuspower = 0, powercnt = 0, phase = 0, n;
     cop[0] = k_alloc(800 * 4);
     cop[1] = k_alloc(800 * 4);
-    tbase = k_frames; done70 = 0;
-    k_mus_frame = 0;
+    {
+        /* the original starts here on the sync point (order 18 row 60);
+         * if loading made the part late, start as far into the effect as
+         * the music already is, so the end (music tick 925) and the beats
+         * after it stay in place */
+        s32 late = k_mus_ticks_since(18, 60);
+        if (late < 0 || late > 400) late = 0;
+#ifdef MUSSTALL
+        { extern volatile u32 k_dbg_val; k_dbg_val = 0x7e000000 | (late << 12); }
+#endif
+        k_mus_frame = late;
+        tbase = k_frames - late;
+        done70 = 0;
+    }
     for (;;) {
         n = steps70();
         while (n-- > 0) {

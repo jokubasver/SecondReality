@@ -223,6 +223,18 @@ static u16 vstamp[V3_MAXV], stamp = 1;
 static u16 vlist[V3_MAXV];
 static s32 cx, cy, cz;          /* camera position in object space */
 
+/* v * 2^28 / (a^2 + b^2 + c^2) */
+static s32 unscale(s32 v, s16 a, s16 b, s16 c)
+{
+    u32 ss = (u32)muls16(a, a) + (u32)muls16(b, b) + (u32)muls16(c, c), r;
+    if ((ss >> 14) == 0)
+        return v;
+    r = (1ul << 28) / (ss >> 14);           /* 1.0 = 16384 */
+    if (r > 16300 && r < 16468)
+        return v;                           /* unit length: as it is */
+    return (v >> 14) * (s32)r + (((v & 0x3fff) * (s32)r) >> 14);
+}
+
 /* per object setup: transform matrix, light and camera in object space */
 static void setup_object(void)
 {
@@ -249,7 +261,14 @@ static void setup_object(void)
         s32 x = -(mul32x16(W.x, W.m[0]) + mul32x16(W.y, W.m[3]) + mul32x16(W.z, W.m[6]));
         s32 y = -(mul32x16(W.x, W.m[1]) + mul32x16(W.y, W.m[4]) + mul32x16(W.z, W.m[7]));
         s32 z = -(mul32x16(W.x, W.m[2]) + mul32x16(W.y, W.m[5]) + mul32x16(W.z, W.m[8]));
-        cx = x; cy = y; cz = z;
+        /* the matrix can scale the object's axes (U2A's mother ship by
+         * 0.77/0.77/0.88): M^-1 = diag(1 / |column|^2) M^T, so each
+         * coordinate is divided by its column's squared length (in
+         * 2^28 units); without this, faces seen nearly edge on came out
+         * on the wrong side */
+        cx = unscale(x, W.m[0], W.m[3], W.m[6]);
+        cy = unscale(y, W.m[1], W.m[4], W.m[7]);
+        cz = unscale(z, W.m[2], W.m[5], W.m[8]);
     }
 }
 

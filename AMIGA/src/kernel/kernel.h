@@ -38,6 +38,8 @@ extern volatile s16 k_mus_order;         /* current order index */
 extern volatile s16 k_mus_row;           /* current row */
 extern volatile s16 k_mus_plusflags;     /* bit0 marker coming, bit1 marker passed */
 extern volatile s32 k_mus_frame;         /* music tick counter (settable) */
+/* music ticks since order o row r started (-1: not among the last 256 rows) */
+s32 k_mus_ticks_since(int o, int r);
 extern volatile u8 k_mus_volume;         /* master volume 0..64 */
 /* dis_musplus(): -32..31 position relative to the nearest "+++" marker. */
 int k_mus_plus(void);

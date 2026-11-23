@@ -24,6 +24,22 @@ struct stream_hdr {
 
 volatile s16 k_mus_order, k_mus_row, k_mus_plusflags;
 volatile s32 k_mus_frame;
+/* row history: the tick each of the last 256 rows started on, so a part
+ * that starts late can tell how far the music is past its sync point */
+static u32 abs_tick;
+static struct { u8 o, r; u32 t; } rowhist[256];
+static u8 rowpos;
+
+s32 k_mus_ticks_since(int o, int r)
+{
+    int i, p = rowpos;
+    for (i = 0; i < 256; i++) {
+        p = (p - 1) & 255;
+        if (rowhist[p].o == o && rowhist[p].r == r && rowhist[p].t)
+            return abs_tick - rowhist[p].t;
+    }
+    return -1;
+}
 volatile u8 k_mus_volume = 64;
 
 static volatile int playing;
@@ -105,6 +121,7 @@ void k_music_start(const void *bank, const void *str)
     k_mus_order = k_mus_row = 0;
     k_mus_plusflags = 0;
     k_mus_frame = 0;
+    memset(rowhist, 0, sizeof(rowhist));
     fade_speed = 0;
     k_mus_volume = 64;
     cur_master = 64;
@@ -210,6 +227,7 @@ void k_music_tick(void)
     if (!playing)
         return;
     k_mus_frame++;
+    abs_tick++;
     if (cur_master != k_mus_volume) {
         cur_master = k_mus_volume;
         for (ch = 0; ch < 4; ch++)
@@ -226,6 +244,9 @@ again:
     if (f & 0x80) {
         if (f == 0x81) {               /* end of chunk */
             if (ready_chunk != cur_chunk + 1) {
+#ifdef MUSSTALL
+                { extern volatile u32 k_dbg_val; k_dbg_val++; }
+#endif
                 sp--;                  /* next chunk not decoded yet: stall */
                 return;
             }
@@ -253,8 +274,12 @@ again:
         k_mus_order = sp[0];
         k_mus_row = sp[1];
         k_mus_plusflags = sp[2];
+        rowhist[rowpos].o = sp[0];
+        rowhist[rowpos].r = sp[1];
+        rowhist[rowpos].t = abs_tick;
+        rowpos++;
         sp += 3;
-#if defined(DEBUG_OVERLAY) && !defined(FPSSTAT) && !defined(V3PROF)
+#if defined(DEBUG_OVERLAY) && !defined(FPSSTAT) && !defined(V3PROF) && !defined(MUSSTALL)
         {
             extern volatile u32 k_dbg_val;
             k_dbg_val = ((u32)k_mus_order << 24) | ((u32)k_mus_row << 16) | ((u32)k_mus_plusflags << 8) | (k_mus_plus() & 0xff);
