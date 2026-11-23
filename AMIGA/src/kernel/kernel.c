@@ -690,6 +690,12 @@ void demo_main(void);
 
 void k_check_chip(void);
 
+/* WHDLoad CUSTOM1 tooltype: 1 = all 8 music voices mixed by the CPU at
+ * 16574 Hz, 2 = the same at 8287 Hz (slower accelerators); 0 or the
+ * floppy version: 4 voices on Paula */
+u32 k_whd_custom1 __attribute__((section(".data"))) = 0;   /* set before the bss is cleared */
+int k_music8;
+
 void kmain(void)
 {
     DMACON = 0x7fff;
@@ -702,6 +708,8 @@ void kmain(void)
     COPJMP1 = 0;
     DMACON = DMAF_SETCLR | DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | DMAF_RASTER;
     k_check_chip();
+    if (k_whd_resload && (k_whd_custom1 == 1 || k_whd_custom1 == 2))
+        k_music8 = k_whd_custom1 == 1 ? 2 : 1;
     /* audio low-pass ("LED") filter off: the power LED dims, the music
      * keeps its treble */
     CIAA_DDRA |= 0x02;

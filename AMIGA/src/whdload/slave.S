@@ -9,13 +9,15 @@
 	.equ	resload_Abort, 4
 	.equ	resload_FlushCache, 32
 	.equ	resload_DiskLoad, 40
+	.equ	resload_Control, 52
+	.equ	WHDLTAG_CUSTOM1_GET, 0x8f000008
 
 	.text
 base:
 	moveq	#-1,d0			| ws_Security
 	rts
 	.ascii	"WHDLOADS"		| ws_ID
-	.word	10			| ws_Version
+	.word	13			| ws_Version (resload_Control, CUSTOM1)
 	.word	3			| ws_Flags: WHDLF_Disk | WHDLF_NoError
 	.long	0x100000		| ws_BaseMemSize: 1 MB chip
 	.long	0			| ws_ExecInstall
@@ -35,6 +37,8 @@ copy:	.asciz	"1993 Future Crew"
 info:	.ascii	"Amiga port by Claude"
 	.byte	10
 	.ascii	"Quit with F10"
+	.byte	10
+	.ascii	"CUSTOM1=1: 8 voice music (fast CPU)"
 	.byte	0
 	.even
 
@@ -59,8 +63,16 @@ start:
 1:	move.l	(a0)+,(a1)+
 	dbf	d0,1b
 	jsr	resload_FlushCache(a2)
+	lea	tags(pc),a0
+	jsr	resload_Control(a2)
 	move.l	a3,a0
 	move.l	a2,a1
 	moveq	#0,d0
 	move.b	keyexit(pc),d0
+	move.l	custom1(pc),d1		| CUSTOM1 tooltype: music option
 	jmp	0x408
+
+	.balign	4
+tags:	.long	WHDLTAG_CUSTOM1_GET
+custom1: .long	0
+	.long	0			| TAG_DONE

@@ -60,6 +60,16 @@ static u16 per[4];
 static u8 cur_master = 64;
 static volatile int fade_speed, fade_acc;
 
+/* the mixer rate: as the stream says, but 8287 Hz on machines that get the
+ * 8 voice stream without being fast enough for 16574 Hz */
+static u16 mix_period(void)
+{
+    extern int k_music8;
+    if (stream->mixmask == 15 && k_music8 == 1 && stream->mixper < 428)
+        return 428;
+    return stream->mixper;
+}
+
 static inline u8 *chunkbuf(int i) { return (u8 *)(CHUNK_BUF + i * CHUNK_SIZE); }
 
 static void set_tempo(u16 v)
@@ -125,7 +135,7 @@ void k_music_start(const void *bank, const void *str)
     fade_speed = 0;
     k_mus_volume = 64;
     cur_master = 64;
-    k_mix_start(stream->mixmask, stream->mixper, 64);
+    k_mix_start(stream->mixmask, mix_period(), 64);
     playing = 1;
 }
 
@@ -153,7 +163,7 @@ void k_music_slow(void)
 
 static inline u16 rd16(const u8 *p) { return (p[0] << 8) | p[1]; }
 
-static u16 mper[4];
+static u16 mper[8];
 
 /* one voice of a record: Paula channel 0-3, or mixed voice 4-7 */
 static void voice_event(int ch)
@@ -287,8 +297,16 @@ again:
 #endif
     }
     if (f & 1) {
-        u8 mask = *sp++;
-        for (ch = 0; ch < 8; ch++) {
+        u16 mask;
+        int nv = 8;
+        if (stream->mixmask == 15) {
+            /* all 4 channels mix: 8 voices, ids 4-11 */
+            mask = rd16(sp);
+            sp += 2;
+            nv = 12;
+        } else
+            mask = *sp++;
+        for (ch = 0; ch < nv; ch++) {
             if (mask & (1 << ch))
                 voice_event(ch);
         }
@@ -336,7 +354,7 @@ void k_music_skip_to(int order)
     }
     silence();
     if (stream)
-        k_mix_start(stream->mixmask, stream->mixper, cur_master);
+        k_mix_start(stream->mixmask, mix_period(), cur_master);
 }
 
 /* nonzero once the music is at or past order o, row r: marker waits use

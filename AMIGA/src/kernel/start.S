@@ -13,9 +13,10 @@ _start:
 	.ascii	"WHDK"
 | WHDLoad entry (0x408): the slave has copied the image to its link address
 | and calls us in supervisor mode with a0 = disk images (ExpMem), a1 =
-| resload base, d0 = quit key.
+| resload base, d0 = quit key, d1 = CUSTOM1 tooltype.
 whd_entry:
 	move.w	#0x2700,sr
+	move.l	d1,k_whd_custom1
 	move.l	a0,k_ramdisk
 	move.l	a1,k_whd_resload
 	move.b	d0,k_whd_quitkey

@@ -11,6 +11,9 @@ void k_preload(int id);
 void k_music_load_bank(int slot, int file_id);
 void k_music_free_bank(int slot);
 void k_music_play(int slot, int stream_id);
+/* the music stream for this machine: all 8 voices on fast CPUs */
+extern int k_music8;
+#define STR(f) (k_music8 ? f##_8 : f)
 
 /* after a part: show its last colour from kernel memory so that its
  * memory is released before the next part is unpacked */
@@ -30,7 +33,7 @@ void demo_main(void)
     {
         void k_music_skip_to(int order);
         k_music_load_bank(TEST_MUSIC, TEST_MUSIC ? F_MUS1_BANK : F_MUS0_BANK);
-        k_music_play(TEST_MUSIC, TEST_MUSIC ? F_MUS1_S0 : TEST_ORDER >= 18 ? F_MUS0_S18 : F_MUS0_S0);
+        k_music_play(TEST_MUSIC, TEST_MUSIC ? STR(F_MUS1_S0) : TEST_ORDER >= 18 ? STR(F_MUS0_S18) : STR(F_MUS0_S0));
         k_set_ipl(6);
         k_music_skip_to(TEST_ORDER);
         k_set_ipl(0);
@@ -40,7 +43,7 @@ void demo_main(void)
 #else
     /* ---- music 0: intro */
     k_music_load_bank(0, F_MUS0_BANK);
-    k_music_play(0, F_MUS0_S0);
+    k_music_play(0, STR(F_MUS0_S0));
 #ifndef SKIP_INTRO
     k_preload_after(F_PART_U2A);
     k_run_part(F_PART_ALKU);
@@ -64,12 +67,12 @@ void demo_main(void)
     }
     /* music 1 loads in the background while the title is shown */
     k_preload_after(F_MUS1_BANK);
-    k_preload_after(F_MUS1_S0);
+    k_preload_after(STR(F_MUS1_S0));
     k_preload_after(F_PART_GLENZ);
     k_run_part(F_PART_BEGLOGO);
     /* ---- music 1 */
     k_music_load_bank(1, F_MUS1_BANK);
-    k_music_play(1, F_MUS1_S0);
+    k_music_play(1, STR(F_MUS1_S0));
 #ifdef MUS1_TRIM_ORDER
     {
         void k_music_trim_at(int slot, int order, u32 bytes);
@@ -124,7 +127,7 @@ void demo_main(void)
         k_music_stop();
         k_music_free_bank(1);
         k_music_load_bank(0, F_MUS0_BANK2);
-        k_music_play(0, F_MUS0_S18);
+        k_music_play(0, STR(F_MUS0_S18));
     }
     k_preload_after(F_PART_ENDLOGO);
     k_run_part(F_PART_U2E);

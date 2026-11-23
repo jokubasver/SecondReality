@@ -498,6 +498,23 @@ def allocate(mod, ticks, table, chmap):
 
 
 # ---------------------------------------------------------------- stream
+def alloc_all(ticks, chmap):
+    """All 8 voices, 2 per Paula channel mixed by the CPU (mixmask 15):
+    left voices on channels 0/3 (stream ids 4,5 / 10,11), right on 1/2
+    (6,7 / 8,9)."""
+    ids = {0: 4, 2: 5, 4: 10, 6: 11, 1: 6, 3: 7, 5: 8, 7: 9}
+    out = []
+    for mk, voices, tempo in ticks:
+        res = [None] * 12
+        for vi in range(8):
+            ch = chmap[vi]
+            st = voices[ch] if ch is not None else None
+            if st is not None and st[3] > 0:
+                res[ids[vi]] = (st[0], st[1], st[2], st[3], st[4], vi)
+        out.append((mk, res, tempo))
+    return out
+
+
 def encode_stream(alloc, table, mixmask=0):
     """Returns a list of tick records (bytes).  Record format:
          u8 ctl: 0x80 end of stream, 0x81 end of chunk, 0x40|n: n (1..63)
@@ -506,7 +523,8 @@ def encode_stream(alloc, table, mixmask=0):
          [bit5] u16 CIA timer value
          [bit4] u8 order, u8 row, u8 plus
          [bit0] u8 voice mask: bits 0-3 Paula channels played directly,
-                bits 4-7 voices mixed by the CPU (2 per mixer channel)
+                bits 4-7 voices mixed by the CPU (2 per mixer channel);
+                u16 when all 4 channels mix (bits 4-11: 8 voices)
          per voice in the mask: u8 cflags:
              bit0 trigger: u8 sample index, u16 offset in words
              bit1 period delta: s8      bit2 period absolute: u16
@@ -516,12 +534,14 @@ def encode_stream(alloc, table, mixmask=0):
     """
     recs = []
     idx = {k: i for i, k in enumerate(sorted(table))}
-    state = [dict(per=None, vol=None, on=False) for _ in range(8)]
+    state = [dict(per=None, vol=None, on=False) for _ in range(12)]
     vdiv = 2.0 if mixmask else 1.0
-    if mixmask:
+    if mixmask and mixmask != 15:
         # the mixer plays its voices 1-2 blocks (15-31 ms) late: send their
-        # events one tick early
-        alloc = [(mk, list(res[:4]) + list((alloc[i + 1][1] if i + 1 < len(alloc) else [None] * 8)[4:]), tempo)
+        # events one tick early, in step with the direct voices (with all
+        # voices mixed they are all equally late; the shift would also lose
+        # notes that start on the first tick)
+        alloc = [(mk, list(res[:4]) + list((alloc[i + 1][1] if i + 1 < len(alloc) else [None] * len(res))[4:]), tempo)
                  for i, (mk, res, tempo) in enumerate(alloc)]
     cur_tempo = None
     for mk, res, tempo in alloc:
@@ -577,7 +597,7 @@ def encode_stream(alloc, table, mixmask=0):
                 vb += bytes([cf]) + cb
         if mask:
             ctl |= 1
-            body += bytes([mask]) + vb
+            body += (struct.pack('>H', mask) if len(res) > 8 else bytes([mask])) + vb
         recs.append(bytes([ctl]) + body)
     out = []
     i = 0
@@ -595,7 +615,7 @@ def encode_stream(alloc, table, mixmask=0):
     return out
 
 
-def write_chunked(path, recs, chunk=1024, mixmask=0, mixper=MIX_PERIOD):
+def write_chunked(path, recs, chunk=4096, mixmask=0, mixper=MIX_PERIOD):
     """Container: 'SRSM', u16 nchunks, u16 maxchunk, u16 mixer channel mask,
     u16 mixer Paula period, u32 offsets[n+1] (from the file start), packed chunks.
     Every chunk ends with 0x81 (continue in next chunk) except the last (0x80)."""
@@ -802,6 +822,11 @@ def channel_map(mod):
     return chmap
 
 
+def set_mixper(p):
+    global MIX_PERIOD
+    MIX_PERIOD = p
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('s3m')
@@ -812,8 +837,12 @@ def main():
     ap.add_argument('--prio', help='note priorities from a reference arrangement (expert_prio.py)')
     ap.add_argument('--old-alloc', action='store_true')
     ap.add_argument('--mixmask', type=int, default=0, help='Paula channels used as CPU mixers (2 voices each)')
+    ap.add_argument('--mixper', type=int, default=MIX_PERIOD, help='mixer Paula period (rate)')
+    ap.add_argument('--all8', type=int, metavar='PERIOD',
+                    help='also write <out>8_<order>.str: all 8 voices mixed by the CPU at this Paula period')
     ap.add_argument('--trim-order', type=int, help='write <out>.trim: bank size needed from this order on')
     a = ap.parse_args()
+    set_mixper(a.mixper)
     mod = S3M(a.s3m)
     alias_inverted(mod)
     chmap = channel_map(mod)
@@ -838,7 +867,9 @@ def main():
         open(a.out + '.trim', 'w').write('%d %d\n' % (a.trim_order, ts))
         print('from order %d the bank needs %d bytes' % (a.trim_order, ts))
     for so, (emu, ticks) in zip(starts, sims):
-        if a.old_alloc:
+        if a.mixmask == 15:
+            al = alloc_all(ticks, chmap)
+        elif a.old_alloc:
             al = allocate(mod, ticks, table, chmap)
         else:
             import paula_alloc
@@ -846,10 +877,18 @@ def main():
                                       paula_alloc.load_prio(a.prio) if a.prio else None,
                                       paula_alloc.slots_for(a.mixmask))
         recs = encode_stream(al, table, a.mixmask)
-        st = write_chunked('%s_%d.str' % (a.out, so), recs, mixmask=a.mixmask)
+        st = write_chunked('%s_%d.str' % (a.out, so), recs, mixmask=a.mixmask, mixper=a.mixper)
         print('stream from order %d: %d bytes raw, %d chunked+packed' % (so, sum(map(len, recs)), st))
         if a.wav:
             render_stream('%s_%d.wav' % (a.out, so), al, table, bank, a.mixmask)
+        if a.all8:
+            set_mixper(a.all8)
+            al8 = alloc_all(ticks, chmap)
+            st = write_chunked('%s8_%d.str' % (a.out, so), encode_stream(al8, table, 15), mixmask=15, mixper=a.all8)
+            print('8 voice stream from order %d: %d bytes' % (so, st))
+            if a.wav:
+                render_stream('%s8_%d.wav' % (a.out, so), al8, table, bank, 15)
+            set_mixper(a.mixper)
 
 
 if __name__ == '__main__':

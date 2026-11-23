@@ -3,7 +3,8 @@
  * that the CPU mixes from 2 voices each (voices the converter could not
  * give a channel of their own).
  *
- * Each mixer channel alternates between two blocks of MIXBLK samples.  The
+ * Each mixer channel alternates between two blocks of blen samples (about
+ * 15 ms: 128 at 8287 Hz, 256 at 16574 Hz).  The
  * audio interrupt comes when Paula starts a block: the other block is
  * queued behind it and mixed (at interrupt level 2, so display and blitter
  * interrupts still come through) while this one plays.
@@ -13,8 +14,8 @@
  */
 #include "kernel_int.h"
 
-#define MIXBLK 128
-#define NMV 4                       /* up to 2 mixer channels x 2 voices */
+#define MIXBLK 256                   /* largest block */
+#define NMV 8                       /* up to 4 mixer channels x 2 voices */
 
 struct mixv {                       /* layout used by mixasm.S */
     const u8 *base;
@@ -45,13 +46,14 @@ static volatile u8 pflags[NMV];
 #define P_STOP 8
 
 static s8 voltab[33][256];
-static u8 blk[2][2][MIXBLK];
+static u8 blk[4][2][MIXBLK];
+static int blen = 128;              /* block length in use */
 static u8 zero[4];
 static int nmix;                    /* mixer channels */
-static int mixch[2];                /* their Paula channel numbers */
+static int mixch[4];                /* their Paula channel numbers */
 static u16 mixper;
-static int alt[2];
-static volatile u8 todo[2];         /* block + 1 to mix, 0 none */
+static int alt[4];
+static volatile u8 todo[4];         /* block + 1 to mix, 0 none */
 static volatile int mixing;
 u16 k_mix_mask;
 
@@ -179,13 +181,13 @@ static void mix_block(int c, u8 *out)
         setup(&xa, a);
         setup(&xb, b);
         xa.step &= 0xffff0000; xb.step &= 0xffff0000;
-        mix2(out, MIXBLK, &xa, &xb);
+        mix2(out, blen, &xa, &xb);
         return;
     }
 #endif
     struct voice *a = &mv[c * 2], *b = &mv[c * 2 + 1];
     struct mixv xa, xb;
-    int n = MIXBLK;
+    int n = blen;
     while (n > 0) {
         int seg = n, s;
         if (a->on && a->step) { s = until_end(a, seg); if (s < seg) seg = s; }
@@ -255,6 +257,7 @@ void k_mix_start(u16 mask, u16 period, u8 master)
     k_mix_stop_all();
     k_mix_mask = mask;
     mixper = period;
+    blen = period < 300 ? 256 : 128;
     nmix = 0;
     for (c = 0; c < 4; c++)
         if (mask & (1 << c))
@@ -269,7 +272,7 @@ void k_mix_start(u16 mask, u16 period, u8 master)
         alt[c] = 1;
         todo[c] = 0;
         AUDLC(ch) = (u32)blk[c][0];
-        AUDLEN(ch) = MIXBLK / 2;
+        AUDLEN(ch) = blen / 2;
         AUDPER(ch) = period;
         AUDVOL(ch) = master;
     }

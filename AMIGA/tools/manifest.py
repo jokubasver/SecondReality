@@ -8,9 +8,9 @@ MIXMASK = _os.environ.get('MIXMASK', '0')
 
 # name, module, stream start orders, sample budget, extra converter options
 MUSIC = [
-    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000, ['--mixmask', MIXMASK]),
+    ('mus0', '../MAIN/MUSIC0.S3M', '0,18', 200000, ['--mixmask', MIXMASK, '--all8', '214']),
     ('mus1', '../MAIN/MUSIC1.S3M', '0', 320000, ['--prio', 'tools/mus1_prio.json', '--trim-order', '92',
-                                                 '--mixmask', MIXMASK]),
+                                                 '--mixmask', MIXMASK, '--all8', '214']),
 ]
 
 # part directories under src/parts
@@ -22,6 +22,9 @@ FILES = [
     ('MUS0_S0', 'build/music/mus0_0.str', 'store', 1),
     ('MUS1_BANK', 'build/music/mus1.smp', 'delta', 1),
     ('MUS1_S0', 'build/music/mus1_0.str', 'store', 1),
+    # all 8 voices mixed by the CPU (used on 68020 and faster)
+    ('MUS0_S0_8', 'build/music/mus08_0.str', 'store', 1),
+    ('MUS1_S0_8', 'build/music/mus18_0.str', 'store', 1),
     ('PART_TEST', 'build/parts/test.prt', 'lz', 1),
     ('PART_ALKU', 'build/parts/alku.prt', 'lz', 1),
     ('PART_U2A', 'build/parts/u2a.prt', 'lz', 1),
@@ -45,4 +48,5 @@ FILES = [
     ('PART_ENDSCRL', 'build/parts/endscrl.prt', 'lz', 2),
     ('MUS0_BANK2', 'build/music/mus0.smp', 'delta', 2),
     ('MUS0_S18', 'build/music/mus0_18.str', 'store', 2),
+    ('MUS0_S18_8', 'build/music/mus08_18.str', 'store', 2),
 ]

@@ -121,11 +121,26 @@ resload:
 	bra.w	r_flush			| 32 FlushCache
 	bra.w	r_bad			| 36 GetFileSize
 	bra.w	r_disk			| 40 DiskLoad
-	.rept	8
+	bra.w	r_bad			| 44
+	bra.w	r_bad			| 48
+	bra.w	r_control		| 52 Control
+	.rept	5
 	bra.w	r_bad
 	.endr
 
 r_rts:	rts
+| Control: CUSTOM1_GET answers WHD_CUSTOM1 (set when building the test disk)
+r_control:
+	move.l	a0,-(sp)
+1:	tst.l	(a0)
+	beq.s	3f
+	cmp.l	#0x8f000008,(a0)
+	bne.s	2f
+	move.l	#WHD_CUSTOM1,4(a0)
+2:	addq.l	#8,a0
+	bra.s	1b
+3:	move.l	(sp)+,a0
+	rts
 | 68020/030 only (what the emulator test uses)
 r_flush:
 	move.l	d0,-(sp)

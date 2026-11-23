@@ -14,7 +14,9 @@ sys.path.insert(0, ROOT)
 import mkadf
 from build import asm_bin, B
 
-h = asm_bin(os.path.join(ROOT, 'src/whdload/harness.S'), os.path.join(B, 'harness.bin'))
+# WHD_CUSTOM1=n in the environment: the CUSTOM1 tooltype the fake WHDLoad reports
+h = asm_bin(os.path.join(ROOT, 'src/whdload/harness.S'), os.path.join(B, 'harness.bin'),
+            [('WHD_CUSTOM1', int(os.environ.get('WHD_CUSTOM1', '0')))])
 h += open(os.path.join(B, 'slave.bin'), 'rb').read()
 size = (len(h) + 511) & ~511
 src = open(os.path.join(ROOT, 'src/kernel/boot.S')).read().replace('moveq\t#2,d1', 'moveq\t#4,d1')
