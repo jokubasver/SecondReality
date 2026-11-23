@@ -710,6 +710,10 @@ void kmain(void)
     k_check_chip();
     if (k_whd_resload && (k_whd_custom1 == 1 || k_whd_custom1 == 2))
         k_music8 = k_whd_custom1 == 1 ? 2 : 1;
+    /* WHDLoad: the left mouse button held at the start also selects the
+     * 8 voice music (16574 Hz), without the tooltype */
+    if (k_whd_resload && !(CIAA_PRA & 0x40))
+        k_music8 = 2;
     /* audio low-pass ("LED") filter off: the power LED dims, the music
      * keeps its treble */
     CIAA_DDRA |= 0x02;

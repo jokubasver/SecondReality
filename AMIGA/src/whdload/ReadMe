@@ -27,6 +27,8 @@ Music quality (tooltype CUSTOM1):
   CUSTOM1=2            all 8 voices at 8.3 kHz, for slower accelerators
                        (around 25 MHz 68020/030)
   e.g.  WHDLoad SecondReality.slave CUSTOM1=1
+  Holding the left mouse button while the demo starts also selects the
+  8 voice music (16.5 kHz).
 
 Quit with F10 at any time (or the quit key set in WHDLoad); the demo also
 returns to WHDLoad by itself after the end scroller.
