@@ -17,6 +17,20 @@ static u32 *cop[2];
 static u32 *ptrs[2];
 static u16 *mods[2];
 static s16 framey1[201], framey2[201];
+/* row tables (no divisions per line): offsets of the full picture rows
+ * and of the bounce rows, and bq * 32 / 25 */
+static u32 fullrow[200], bncrow[200];
+static s16 bq25[400];
+
+static inline s16 divs16(s32 n, s16 d)
+{
+#ifdef __m68k__
+    __asm__("divs.w %2,%0" : "=d"(n) : "0"(n), "d"(d) : "cc");
+    return (s16)n;
+#else
+    return n / d;
+#endif
+}
 
 #define FULL 255                /* version: the 184 pixel picture, 200 rows */
 
@@ -30,8 +44,8 @@ static const u8 *rowptr(int g, int v)
     if (g >= 200)
         return jpic + (v == FULL ? EGROUP : BEGROUP) * GROUP;
     if (v == FULL)
-        return jpic + (FGROUP0 + g / NV) * GROUP + (g % NV) * 32;
-    return jpic + (1 + g * BROWS / 200) * GROUP + v * 32;
+        return jpic + fullrow[g];
+    return jpic + bncrow[g] + v * 32;
 }
 
 /* build frame data: rows[L] = row, vers[L] = width version (row -1 = empty) */
@@ -99,6 +113,12 @@ void part_main(void)
     u32 *c, t0;
     int i, b = 0, l, frame;
     calc_frames();
+    for (i = 0; i < 200; i++) {
+        fullrow[i] = (FGROUP0 + i / NV) * GROUP + (i % NV) * 32;
+        bncrow[i] = (1 + i * BROWS / 200) * GROUP;
+    }
+    for (i = 0; i < 400; i++)
+        bq25[i] = i * 32 / 25;
     for (i = 0; i < 2; i++) {
         cop[i] = k_alloc((64 + 200 * 3) * 4);
         c = cop[i];
@@ -175,8 +195,8 @@ void part_main(void)
                 rows[l] = y < y1 ? -1 : 200;
                 vers[l] = 0;
             } else {
-                int bq = (s32)(y - y1) * 400 / (y2 - y1);
-                int a = 184 + (jsin[(bq * 32 / 25) & 1023] * xsc + 32) / 64;
+                int bq = divs16((s32)(y - y1) * 400, y2 - y1);
+                int a = 184 + divs16(jsin[bq25[bq] & 1023] * xsc + 32, 64);
                 int v = (a - 136 + 4) >> 3;
                 if (v < 0) v = 0;
                 if (v > NV - 1) v = NV - 1;
