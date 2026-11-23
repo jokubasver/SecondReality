@@ -20,7 +20,7 @@
 #define PTOP 30                         /* top line of the plasma */
 #define HPOS 0x38
 
-void plz_line(const u16 *p1, const s32 *ta, u16 *cop, const s16 *tb,
+void plz_line(const u16 *p1, const s16 *ta, u16 *cop, const s16 *tb,
               const u16 *p2, const u16 *pal);
 void cube_main(void);
 
@@ -119,10 +119,10 @@ static void draw(void)
         S2 = k3 + 2 * y + 320;
         Q = k4 + y;
         if (!(l & 1))
-            plz_line((const u16 *)((const u8 *)pw + 2 * (k1 + 10 * R)), ta + R, (u16 *)ln,
+            plz_line(pw + ((k1 + 10 * R) & 4095), ta + R, (u16 *)ln,
                      tb + Q, pw + S2 + Q / 12, coltab);
         else
-            plz_line((const u16 *)((const u8 *)pw + 2 * (k1 + 10 * R)), ta + R - 4, (u16 *)ln,
+            plz_line(pw + ((k1 + 10 * R) & 4095), ta + R - 4, (u16 *)ln,
                      tb + Q + 48, pw + S2 + Q / 12, coltab2);
     }
 }
@@ -233,7 +233,20 @@ void part_main(void)
             clear_lines(oldtop, top);
         if (top < oldtop)
             clear_lines(PTOP + PLINES, NLINES);
+#ifdef V3PROF
+        {
+            /* overlay: draw time in raster lines (16 update average) */
+            extern volatile u32 k_dbg_val;
+            static u32 acc, n;
+            u32 f0 = k_frames, a = (*(volatile u32 *)0xdff004 >> 8) & 0x1ff, b;
+            draw();
+            b = (*(volatile u32 *)0xdff004 >> 8) & 0x1ff;
+            acc += (k_frames - f0) * 313 + b - a;
+            if (++n == 16) { k_dbg_val = acc / 16; acc = n = 0; }
+        }
+#else
         draw();
+#endif
         k_set_copper(cop[back]);
         back ^= 1;
         oldtop = top;

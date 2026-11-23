@@ -1,6 +1,6 @@
 | PLZPART copper plasma: one line.
 |
-| void plz_line(const u16 *p1, const s32 *ta, u16 *cop, const s16 *tb,
+| void plz_line(const u16 *p1, const s16 *ta, u16 *cop, const s16 *tb,
 |               const u16 *p2, const u16 *pal)
 |   (argument order = register order a0, a1, a3, a4, a5, a6 for movem)
 |   value = p1[ta[-8x]] + p2[tb[96x]] (byte offsets), colour = pal[value]
@@ -10,8 +10,8 @@
 	.macro	CELLS
 	.set	x,0
 	.rept	40
-	move.l	-32*x(a1),d0
-	move.w	0(a0,d0.l),d2
+	move.w	-16*x(a1),d0
+	move.w	0(a0,d0.w),d2
 	move.w	192*x(a4),d1
 	add.w	0(a5,d1.w),d2
 	move.w	0(a6,d2.w),(4*x+6)(a3)

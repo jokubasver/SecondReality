@@ -33,8 +33,11 @@ H = gfxconv.Header('plz_data.h')
 #   term1 = P[(c1 + 10R) + A[j]],  A[j] = L16[j] - 10j,       j = R - 8x
 #   term2 = P[(S2 + Q/12) + B[j]], B[j] = L4[j] - floor(j/12), j = Q + 96x
 # all as byte offsets into the word table Pw = 2 * psini
+# P has a period of 4096: A is kept in 0..4095 (16 bit offsets) and the
+# line part (c1 + 10R) is taken & 4095
+psini = [psini[a % 4096] for a in range(16384)]
 H.array('pw', [2 * v for v in psini], 'u16')
-H.array('ta', [2 * (l16[j] - 10 * j) for j in range(8192)], 's32')
+H.array('ta', [2 * ((l16[j] - 10 * j) % 4096) for j in range(8192)], 's16')
 H.array('tb', [2 * l4[j] - 2 * (j // 12) for j in range(8192)], 's16')
 
 # palettes (PLZ.C init_plz), 6 bit; entry 0 stays black
