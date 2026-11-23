@@ -136,7 +136,7 @@ void demo_main(void)
     k_run_part(F_PART_CRED);
     solid(0);
     k_run_part(F_PART_ENDSCRL);
-#ifdef MEMSTAT
+#if defined(MEMSTAT) || defined(FPSSTAT)
     {
         extern u32 k_memstat[32];
         extern void k_panic(u32 vec, u32 *regs, u16 *frame);

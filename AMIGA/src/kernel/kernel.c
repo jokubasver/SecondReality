@@ -133,6 +133,24 @@ int k_waitvbl(void)
         ;
     d = k_frames - last_wait;
     last_wait = k_frames;
+#ifdef FPSSTAT
+    {
+        /* per part: waits that came 2+ frames after the last one (high
+         * word) and the frames they took (low word) */
+        extern u32 k_memstat[32];
+        extern int k_memstat_part;
+        if (d >= 2 && d < 100) k_memstat[k_memstat_part & 31] += 0x10000 + d;
+#ifdef DEBUG_OVERLAY
+        {
+            /* live: waits and frames in the last 100 waits */
+            extern volatile u32 k_dbg_val;
+            static u32 nw, fr, sw;
+            nw++; fr += d; if (d >= 2) sw++;
+            if (nw >= 100) { k_dbg_val = (sw << 16) | fr; nw = fr = sw = 0; }
+        }
+#endif
+    }
+#endif
     return d < 1 ? 1 : d;
 }
 
@@ -324,7 +342,7 @@ void *k_alloc_tag(u32 size, int tag)
     memset((void *)p, 0, size);
     return (void *)p;
 }
-#ifdef MEMSTAT
+#if defined(MEMSTAT) || defined(FPSSTAT)
 u32 k_memstat[32];
 int k_memstat_part;
 #endif
@@ -533,12 +551,14 @@ struct part_hdr {
 
 void k_run_part(int id)
 {
-#ifdef MEMSTAT
+#if defined(MEMSTAT) || defined(FPSSTAT)
     {
         extern u32 k_memstat[32];
         extern int k_memstat_part;
         static int n;
+#ifdef MEMSTAT
         if (!n) { int q; for (q = 0; q < 32; q++) k_memstat[q] = 0xffffffff; }
+#endif
         k_memstat_part = n++;
     }
 #endif

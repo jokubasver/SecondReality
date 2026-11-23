@@ -11,9 +11,9 @@
 #define LINE0 0x48
 #define VEKE 2800
 
-void mnt_draw(const u16 *map, const u32 *textcols, int k, u8 *plane);
+void mnt_draw(const u16 *map, const u32 *newc, const u32 *oldc, u8 *plane);
 
-static u8 *scr[2];                  /* double buffered */
+static u8 *scr[2];                  /* one used */
 static u32 *cop[2];
 static u16 *colp[2];
 
@@ -33,8 +33,11 @@ void part_main(void)
 {
     static const u16 *const maps[3] = { map0, map1, map2 };
     u32 *c, t0;
-    int i, t, b, fp = 0, fadeout = 0;
-    for (b = 0; b < 2; b++) {
+    int i, t, b, k, fp = 0, fadeout = 0;
+    /* text position each table was last drawn at, per buffer (only the
+     * changed pixels are drawn); far left = no text yet */
+    int lastk[1][3] = { { -136, -136, -136 } };
+    for (b = 0; b < 1; b++) {
         scr[b] = k_alloc(PL * 5);
         memcpy(scr[b], bg, PL * 4);
         cop[b] = k_alloc(64 * 4);
@@ -63,6 +66,7 @@ void part_main(void)
         *c++ = CMOVE(R_BPLCON0, 0x0200);
         *c++ = CEND;
     }
+    colp[1] = colp[0];
     set_pal(0, 0);
     k_set_copper(cop[0]);
     /* landscape fades in */
@@ -76,10 +80,13 @@ void part_main(void)
     while (!k_exit() && k_mus_plus() < 0 && !k_mus_after(42, 0))
         k_waitvbl();
     /* scroll: phase = 70 Hz frame count, the text moves one pixel every
-     * three phases */
+     * three phases.  As the original: one table per frame, the text
+     * position kept for a round of three (the tables cover different
+     * screen pixels); only the font pixels that changed since the table
+     * was last drawn are written. */
     t0 = k_frames;
-    b = 1;
-    for (;;) {
+    k = 0;
+    for (b = 0;; b = b == 2 ? 0 : b + 1) {
         int ph = (k_frames - t0) * 7 / 5;
         if (k_exit() || ph >= VEKE) break;
         if (k_mus_plus() == -11) fadeout = 1;
@@ -88,13 +95,10 @@ void part_main(void)
             if (fp >= 64) break;
             set_pal(64 - fp, 64 - fp);
         }
-        /* all three tables at the same text position into the hidden
-         * buffer, then show it (one table per frame at moving positions
-         * leaves stale stripes) */
-        for (i = 0; i < 3; i++)
-            mnt_draw(maps[i], textcols, ph / 3, scr[b] + 4 * PL);
-        k_set_copper(cop[b]);
-        b ^= 1;
+        if (b == 0)
+            k = ph / 3;
+        mnt_draw(maps[b], tcols + k + 136, tcols + lastk[0][b] + 136, scr[0] + 4 * PL);
+        lastk[0][b] = k;
         k_waitvbl();
     }
     set_pal(0, 0);

@@ -42,20 +42,40 @@ for x in range(640):
         if d[778 + y * 640 + x] >= 1:      # the original lights every font pixel
             col |= 1 << y
     txt.append(col)
-H.array('textcols', txt, 'u32', 4)
-# mapping tables: per font pixel (y*237+x): count, then (byte offset << 3 | bit)
+# the text as columns (bit y = row y), 240 empty columns in front (a
+# scroll position of -136 shows nothing), then the 640 text columns, then
+# the last column repeated; screen column x of scroll position k shows
+# column x + k + 136
+SW = 1310
+cols = [0] * 240 + txt[:640]
+cols += [cols[-1]] * (SW - len(cols))
+H.array('tcols', cols, 'u32')
+H.define('SW', SW)
+# mapping tables, per text column x (0..236): the byte length of its
+# entries, their number - 1, then the entries (row y, 2 * count, count
+# words of byte offset << 3 | bit)
 for t in range(3):
     m = open(os.path.join(R, 'POS%d.DAT' % (t + 1)), 'rb').read()
     p = 0
-    words = []
+    ent = [[] for x in range(237)]
     for i in range(237 * 31):
         n = struct.unpack_from('<H', m, p)[0]
         p += 2
-        words.append(n)
-        for k in range(n):
-            o = struct.unpack_from('<H', m, p + 2 * k)[0]
-            x, y = o % 320, o // 320
-            words.append(((y * 40 + (x >> 3)) << 3) | (7 - (x & 7)))
+        if n:
+            e = [i // 237, 2 * n]
+            for k in range(n):
+                o = struct.unpack_from('<H', m, p + 2 * k)[0]
+                x, y = o % 320, o // 320
+                e.append(((y * 40 + (x >> 3)) << 3) | (7 - (x & 7)))
+            ent[i % 237] += e
         p += 2 * n
+    words = []
+    for x, e in enumerate(ent):
+        cnt = 0
+        j = 0
+        while j < len(e):
+            cnt += 1
+            j += 2 + e[j + 1] // 2
+        words += [2 * len(e), cnt - 1] + e if e else [0, 0xffff]
     H.array('map%d' % t, words, 'u16')
 H.write(out)

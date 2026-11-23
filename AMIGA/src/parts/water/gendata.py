@@ -45,7 +45,9 @@ H.define('FW', FW)
 open(os.path.join(out, 'water_fw.i'), 'w').write('FW = %d\n' % FW)
 H.array('swpal', [c for col in swpal for c in col])
 bgidx = idx
-# maps: per scroll buffer pixel (r * 158 + x): count, then (byte, bit) pairs
+# maps: only the scroll buffer pixels that show somewhere: strip offset
+# (r * FW + x), count, then count (byte, bit | background << 8) pairs;
+# 0xffff ends the list
 for t in (1, 2, 3):
     b = seg('WAT%d' % t)
     w = struct.unpack('<%dH' % (len(b) // 2), b)
@@ -54,11 +56,12 @@ for t in (1, 2, 3):
     for k in range(158 * 34):
         c = w[i]
         i += 1
-        o.append(c)
-        for p in w[i:i + c]:
-            # byte offset; bit | background colour << 8 (for restoring)
-            o += [(p // 320) * 40 + (p % 320) // 8, (7 - (p % 8)) | (bgidx[p // 320][p % 320] << 8)]
+        if c:
+            o += [(k // 158) * FW + k % 158, c]
+            for p in w[i:i + c]:
+                o += [(p // 320) * 40 + (p % 320) // 8, (7 - (p % 8)) | (bgidx[p // 320][p % 320] << 8)]
         i += c
+    o.append(0xffff)
     H.array('wmap%d' % t, o, 'u16')
 H.write(out)
 

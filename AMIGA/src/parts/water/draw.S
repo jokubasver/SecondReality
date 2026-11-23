@@ -1,32 +1,29 @@
 | RAYSCRL: the sword's reflections.
 |
 | void ray_draw(const u16 *map, const u8 *newm, const u8 *oldm, u8 *screen)
-|   map: per scroll buffer pixel (34 rows of 158): count, then count pairs
-|   (byte offset, bit | background colour << 8).  newm/oldm: the sword
-|   strip (0 or colour 16-31) at the scroll position now and when this map
-|   was last drawn (rows of FW bytes).  Where a pixel's colour changed, the
-|   screen pixels it maps to get the bits that differ flipped in all 5
-|   planes (colour = the sword's, or the background's where it has gone).
+|   map: the scroll buffer pixels that show on screen: strip offset, count,
+|   then count pairs (byte offset, bit | background colour << 8); 0xffff
+|   ends it.  newm/oldm: the sword strip (0 or colour 16-31) at the scroll
+|   position now and when this map was last drawn.  Where a pixel's colour
+|   changed, the screen pixels it maps to get the bits that differ flipped
+|   in all 5 planes (colour = the sword's, or the background's where it
+|   has gone).
 
 PL = 8000
-	.include "water_fw.i"
 
 	.text
 	.globl	ray_draw
 ray_draw:
-	movem.l	d2-d7/a2-a5,-(sp)
-	move.l	44(sp),a0
-	move.l	48(sp),a2
-	move.l	52(sp),a3
-	move.l	56(sp),a1
-	moveq	#33,d7
-.Lrow:	move.w	#157,d6
-	move.l	a2,-(sp)
-	move.l	a3,-(sp)
-.Lpix:	move.w	(a0)+,d3
-	beq.s	.Lnext
-	move.b	(a2),d0			| new colour (0 = none)
-	move.b	(a3),d1			| old colour
+	movem.l	d2-d6/a2-a5,-(sp)
+	move.l	40(sp),a0
+	move.l	44(sp),a2
+	move.l	48(sp),a3
+	move.l	52(sp),a1
+.Lpix:	move.w	(a0)+,d6		| strip offset
+	bmi.s	.Lend			| 0xffff
+	move.w	(a0)+,d3		| count
+	move.b	0(a2,d6.w),d0		| new colour (0 = none)
+	move.b	0(a3,d6.w),d1		| old colour
 	cmp.b	d0,d1
 	beq.s	.Lskip
 	subq.w	#1,d3
@@ -59,16 +56,9 @@ ray_draw:
 	bcc.s	9f
 	bchg	d2,4*PL(a5)
 9:	dbf	d3,.Lpos
-	bra.s	.Lnext
+	bra.s	.Lpix
 .Lskip:	lsl.w	#2,d3
 	add.w	d3,a0
-.Lnext:	addq.l	#1,a2
-	addq.l	#1,a3
-	dbf	d6,.Lpix
-	move.l	(sp)+,a3
-	move.l	(sp)+,a2
-	lea	FW(a2),a2
-	lea	FW(a3),a3
-	dbf	d7,.Lrow
-	movem.l	(sp)+,d2-d7/a2-a5
+	bra.s	.Lpix
+.Lend:	movem.l	(sp)+,d2-d6/a2-a5
 	rts

@@ -225,6 +225,10 @@ def main():
         defs.append('-DSKIP_INTRO')
     if os.environ.get('MIXBENCH'):
         defs.append('-DMIXBENCH')
+    if os.environ.get('V3PROF'):
+        defs.append('-DV3PROF')
+    if os.environ.get('FPSSTAT'):
+        defs.append('-DFPSSTAT')
     if os.environ.get('MEMSTAT'):
         defs.append('-DMEMSTAT')
     if os.environ.get('OVERLAY'):

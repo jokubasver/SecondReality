@@ -17,7 +17,21 @@
 #define BPR 40
 
 int v3_polys_drawn;
+#ifdef V3PROF
+/* profiling: raster lines spent waiting for the blitter / in v3_draw */
+u32 v3_prof_wait, v3_prof_total;
+static inline int v3_line(void) { return ((*(volatile u16 *)0xdff004 & 1) << 8) | (*(volatile u16 *)0xdff006 >> 8); }
+static void wblit_prof(void)
+{
+    int a = v3_line(), b;
+    k_wait_blitter();
+    b = v3_line();
+    v3_prof_wait += b >= a ? b - a : b + 313 - a;
+}
+#define wblit wblit_prof
+#else
 #define wblit k_wait_blitter
+#endif
 
 static const s16 light[3] = { 12118, 10603, 3030 };
 
@@ -470,7 +484,13 @@ static inline int facing(const struct v3obj *o, const u16 *pd)
     v = o->v + pd[3] * 3;
     /* full precision: big objects seen nearly edge on (U2A's mother
      * ship) need it, 1/16 units flipped the sign */
-    d = mul32x16(v[0] - cx, nn[0]) + mul32x16(v[1] - cy, nn[1]) + mul32x16(v[2] - cz, nn[2]);
+    {
+        s32 dx = v[0] - cx, dy = v[1] - cy, dz = v[2] - cz;
+        if ((u32)(dx + 32768) < 65536 && (u32)(dy + 32768) < 65536 && (u32)(dz + 32768) < 65536)
+            d = mul16(nn[0], dx) + mul16(nn[1], dy) + mul16(nn[2], dz);   /* exact */
+        else
+            d = mul32x16(dx, nn[0]) + mul32x16(dy, nn[1]) + mul32x16(dz, nn[2]);
+    }
 #ifdef V3_DEBUG_FACING
     V3_DEBUG_FACING(o, pd, d);
 #endif
@@ -602,7 +622,32 @@ static void draw_object(struct v3scene *s, const struct v3obj *o)
     }
 }
 
+void v3_draw_(struct v3scene *s, struct v3screen *scr);
 void v3_draw(struct v3scene *s, struct v3screen *scr)
+{
+#ifdef V3PROF
+    int a = v3_line(), b;
+    u32 f0 = k_frames;
+    v3_draw_(s, scr);
+    k_wait_blitter();
+    b = v3_line();
+    v3_prof_total += (k_frames - f0) * 313 + b - a;
+    {
+        /* overlay: lines waiting for the blitter / total, per 16 draws */
+        extern volatile u32 k_dbg_val;
+        static int n;
+        if (++n == 16) {
+            k_dbg_val = ((v3_prof_wait / 16) << 16) | (v3_prof_total / 16);
+            v3_prof_wait = v3_prof_total = 0;
+            n = 0;
+        }
+    }
+#else
+    v3_draw_(s, scr);
+#endif
+}
+
+void v3_draw_(struct v3scene *s, struct v3screen *scr)
 {
     static u8 order[V3_MAXINST];
     static s32 dist[V3_MAXINST];

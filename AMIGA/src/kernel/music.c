@@ -254,7 +254,7 @@ again:
         k_mus_row = sp[1];
         k_mus_plusflags = sp[2];
         sp += 3;
-#ifdef DEBUG_OVERLAY
+#if defined(DEBUG_OVERLAY) && !defined(FPSSTAT) && !defined(V3PROF)
         {
             extern volatile u32 k_dbg_val;
             k_dbg_val = ((u32)k_mus_order << 24) | ((u32)k_mus_row << 16) | ((u32)k_mus_plusflags << 8) | (k_mus_plus() & 0xff);
