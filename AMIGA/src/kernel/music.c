@@ -44,6 +44,16 @@ volatile u8 k_mus_volume = 64;
 
 static volatile int playing;
 static const u8 *bank_pcm;
+static const u8 *mix_pcm;       /* samples the mixer reads: a fast RAM copy if there is one */
+
+/* WHDLoad: the fast pool after the disk images in ExpMem (see slave.S) */
+#define FASTPOOL 0x58000
+u8 *k_fast_pool(void)
+{
+    extern u8 *k_ramdisk;
+    extern void *k_whd_resload;
+    return k_whd_resload && k_ramdisk ? k_ramdisk + 2 * 901120 : 0;
+}
 static const struct smp *bank_tab;
 static const struct stream_hdr *stream;
 static const u8 *sp;            /* read pointer into the current chunk buffer */
@@ -118,6 +128,7 @@ void k_music_start(const void *bank, const void *str)
     tab = (tab + 3) & ~3u;
     bank_tab = (const struct smp *)(b + 2);
     bank_pcm = b + tab;
+    mix_pcm = bank_pcm;
     stream = (const struct stream_hdr *)str;
     cur_chunk = 0;
     cur_buf = 0;
@@ -135,6 +146,26 @@ void k_music_start(const void *bank, const void *str)
     fade_speed = 0;
     k_mus_volume = 64;
     cur_master = 64;
+    {
+        /* all voices mixed and WHDLoad's fast memory there: the mixer
+         * reads its samples (and volume table) from a fast RAM copy; on an
+         * accelerator chip RAM is behind the slow 7 MHz bus */
+        u8 *pool = k_fast_pool();
+        extern void k_mix_fast(u8 *pool);
+        k_mix_fast(0);
+        if (pool && stream->mixmask == 15) {
+            u32 end = 4, i;
+            for (i = 0; i < n; i++) {
+                u32 e = bank_tab[i].off + (u32)bank_tab[i].len * 2;
+                if (e > end) end = e;
+            }
+            if (0x2400 + end <= FASTPOOL) {
+                memcpy(pool + 0x2400, bank_pcm, end);
+                mix_pcm = pool + 0x2400;
+                k_mix_fast(pool);
+            }
+        }
+    }
     k_mix_start(stream->mixmask, mix_period(), 64);
     playing = 1;
 }
@@ -175,7 +206,7 @@ static void voice_event(int ch)
             const struct smp *s = &bank_tab[sp[0]];
             u16 offw = rd16(sp + 1);
             sp += 3;
-            k_mix_trigger(v, bank_pcm + s->off, (u32)s->len * 2, (u32)s->lb * 2,
+            k_mix_trigger(v, mix_pcm + s->off, (u32)s->len * 2, (u32)s->lb * 2,
                           (u32)s->ll * 2, (u32)offw * 2);
         }
         if (cf & 2) {

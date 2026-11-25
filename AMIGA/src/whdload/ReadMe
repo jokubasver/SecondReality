@@ -15,20 +15,20 @@ Slave=SecondReality.slave.
 Requirements:
   - WHDLoad 10 or newer
   - 1 MB chip memory (the demo is written for 1 MB chip, OCS/ECS)
-  - about 1.8 MB of other memory (the slave keeps both disk images in
-    memory, so the demo never waits for a disk or asks for disk 2)
+  - about 2.2 MB of other memory (both disk images are kept in memory, so
+    the demo never waits for a disk, plus room for the 8 voice music)
 
-Music quality (tooltype CUSTOM1):
-  CUSTOM1=0 (default)  the 4 voice arrangement played by Paula, as on the
-                       floppy version
-  CUSTOM1=1            all 8 voices of the original music, mixed by the CPU
-                       at 16.5 kHz: needs a fast CPU (PiStorm, 68040/060 or
-                       a fast 68030), otherwise the effects slow down
-  CUSTOM1=2            all 8 voices at 8.3 kHz, for slower accelerators
-                       (around 25 MHz 68020/030)
-  e.g.  WHDLoad SecondReality.slave CUSTOM1=1
-  Holding the left mouse button while the demo starts also selects the
-  8 voice music (16.5 kHz).
+Music (setting "Music" in the WHDLoad window, WHDLoad 17 or newer; or the
+tooltype CUSTOM1):
+  4 voices (Paula)          as on the floppy version (CUSTOM1=0, default)
+  8 voices 16.5 kHz         all 8 voices of the original music, mixed by the
+                            CPU (CUSTOM1=1): needs a fast CPU (PiStorm,
+                            68040/060, fast 68030)
+  8 voices 8.3 kHz          the same at a lower rate, for slower
+                            accelerators (CUSTOM1=2)
+Holding the left mouse button while the demo starts also selects 8 voices
+at 16.5 kHz.  With 8 voices the mixer works from a copy of the samples in
+fast memory (part of the memory the slave asks WHDLoad for).
 
 Quit with F10 at any time (or the quit key set in WHDLoad); the demo also
 returns to WHDLoad by itself after the end scroller.

@@ -6,6 +6,7 @@
 | files from memory instead of the floppy drive.  Fully PC relative.
 
 	.equ	ADF_SIZE, 901120
+	.equ	FASTPOOL, 0x58000		| after the images: a fast copy of the music bank
 	.equ	resload_Abort, 4
 	.equ	resload_FlushCache, 32
 	.equ	resload_DiskLoad, 40
@@ -17,7 +18,7 @@ base:
 	moveq	#-1,d0			| ws_Security
 	rts
 	.ascii	"WHDLOADS"		| ws_ID
-	.word	13			| ws_Version (resload_Control, CUSTOM1)
+	.word	17			| ws_Version (ws_config)
 	.word	3			| ws_Flags: WHDLF_Disk | WHDLF_NoError
 	.long	0x100000		| ws_BaseMemSize: 1 MB chip
 	.long	0			| ws_ExecInstall
@@ -27,10 +28,17 @@ base:
 	.byte	0			| ws_keydebug
 keyexit:
 	.byte	0x59			| ws_keyexit: F10
-expmem:	.long	2*ADF_SIZE		| ws_ExpMem (address after install)
+expmem:	.long	2*ADF_SIZE+FASTPOOL	| ws_ExpMem (address after install)
 	.word	name-base		| ws_name
 	.word	copy-base		| ws_copy
 	.word	info-base		| ws_info
+	.word	0			| ws_kickname
+	.long	0			| ws_kicksize
+	.word	0			| ws_kickcrc
+	.word	config-base		| ws_config: settings in the WHDLoad window
+
+config:	.ascii	"C1:L:Music:4 voices (Paula),8 voices 16.5 kHz (fast CPU),8 voices 8.3 kHz"
+	.byte	0
 
 name:	.asciz	"Second Reality (Amiga OCS port)"
 copy:	.asciz	"1993 Future Crew"
@@ -38,7 +46,7 @@ info:	.ascii	"Amiga port by Claude"
 	.byte	10
 	.ascii	"Quit with F10"
 	.byte	10
-	.ascii	"CUSTOM1=1: 8 voice music (fast CPU)"
+	.ascii	"Music option: 8 voices needs a fast CPU"
 	.byte	0
 	.even
 

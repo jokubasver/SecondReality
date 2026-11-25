@@ -17,7 +17,7 @@ fail_1:	move.w	#0x00f,0xdff180
 ok_1:
 	lea	images(pc),a0
 	move.l	d0,(a0)
-	move.l	#2*ADF_SIZE,d0
+	move.l	#2*ADF_SIZE+0x58000,d0	| ExpMem: images + fast pool (slave FASTPOOL)
 	moveq	#4,d1
 	jsr	-198(a6)
 	tst.l	d0

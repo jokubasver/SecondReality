@@ -46,7 +46,23 @@ static volatile u8 pflags[NMV];
 #define P_STOP 8
 
 static s8 voltab[33][256];
-static u8 blk[4][2][MIXBLK];
+static s8 (*vt)[256] = voltab;      /* the table in use (a fast RAM copy) */
+static u8 *fbuf;                    /* fast RAM mixing buffer, 0 = mix into chip */
+
+/* pool: 0x2400 bytes of fast memory for the table and a mixing buffer
+ * (0: back to chip RAM) */
+void k_mix_fast(u8 *pool)
+{
+    if (!pool) {
+        vt = voltab;
+        fbuf = 0;
+        return;
+    }
+    memcpy(pool, voltab, sizeof(voltab));
+    vt = (s8 (*)[256])pool;
+    fbuf = pool + 0x2100;
+}
+static u8 blk[4][2][MIXBLK] __attribute__((aligned(4)));
 static int blen = 128;              /* block length in use */
 static u8 zero[4];
 static int nmix;                    /* mixer channels */
@@ -148,13 +164,13 @@ static void setup(struct mixv *x, struct voice *m)
         x->base = zero;
         x->pos = 0;
         x->step = 0;
-        x->tab = voltab[0];
+        x->tab = vt[0];
         return;
     }
     x->base = m->smp + m->ipos;
     x->pos = (u32)m->frac << 16;
     x->step = (m->step << 16) | (m->step >> 16);
-    x->tab = voltab[m->q];
+    x->tab = vt[m->q];
 }
 
 static void advance(struct mixv *x, struct voice *m)
@@ -188,6 +204,9 @@ static void mix_block(int c, u8 *out)
     struct voice *a = &mv[c * 2], *b = &mv[c * 2 + 1];
     struct mixv xa, xb;
     int n = blen;
+    u8 *dst = out;
+    if (fbuf)
+        out = fbuf;
     while (n > 0) {
         int seg = n, s;
         if (a->on && a->step) { s = until_end(a, seg); if (s < seg) seg = s; }
@@ -200,6 +219,14 @@ static void mix_block(int c, u8 *out)
         advance(&xb, b);
         out += seg;
         n -= seg;
+    }
+    if (fbuf) {
+        /* the block to chip RAM in longwords */
+        const u32 *f = (const u32 *)fbuf;
+        u32 *d = (u32 *)dst;
+        int i;
+        for (i = 0; i < blen / 4; i++)
+            d[i] = f[i];
     }
 }
 

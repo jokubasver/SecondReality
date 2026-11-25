@@ -223,16 +223,26 @@ static u16 vstamp[V3_MAXV], stamp = 1;
 static u16 vlist[V3_MAXV];
 static s32 cx, cy, cz;          /* camera position in object space */
 
-/* v * 2^28 / (a^2 + b^2 + c^2) */
+/* v * 2^28 / (a^2 + b^2 + c^2); saturated (shrunken objects have small
+ * columns and big ratios: a wrapped result put the camera on the wrong
+ * side of faces) */
 static s32 unscale(s32 v, s16 a, s16 b, s16 c)
 {
     u32 ss = (u32)muls16(a, a) + (u32)muls16(b, b) + (u32)muls16(c, c), r;
+    s32 hi, lim;
     if ((ss >> 14) == 0)
         return v;
     r = (1ul << 28) / (ss >> 14);           /* 1.0 = 16384 */
     if (r > 16300 && r < 16468)
         return v;                           /* unit length: as it is */
-    return (v >> 14) * (s32)r + (((v & 0x3fff) * (s32)r) >> 14);
+    hi = v >> 14;
+    lim = 0x3fffffff / (s32)r;
+    if (hi > lim) return 0x3fffffff;
+    if (hi < -lim) return -0x3fffffff;
+    {
+        s32 lo = v & 0x3fff;            /* lo * r / 2^14 without overflow */
+        return hi * (s32)r + lo * (s32)(r >> 14) + ((lo * (s32)(r & 0x3fff)) >> 14);
+    }
 }
 
 /* per object setup: transform matrix, light and camera in object space */
